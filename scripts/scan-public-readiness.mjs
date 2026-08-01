@@ -65,7 +65,7 @@ for (const filename of await walk(root)) {
     if (lowered.includes(token.toLowerCase())) failures.push(`${rel}: contains a deployment-specific identity token`)
   }
   for (const email of personalEmails(text)) failures.push(`${rel}: contains non-example email ${email}`)
-  if (/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i.test(text) && rel === 'wrangler.jsonc') {
+  if (/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i.test(text) && /^wrangler(?:\.[^.]+)*\.jsonc$/.test(path.basename(filename))) {
     failures.push(`${rel}: contains a concrete resource identifier`)
   }
   if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(text)) failures.push(`${rel}: contains a private key`)

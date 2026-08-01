@@ -24,6 +24,7 @@ The module—not the agent or transport adapter—owns lifecycle policy, authori
 
 - Case queues, search, assignment, priority, lifecycle, public replies, and private notes
 - Public knowledge, request intake, private case links, attachments, and bounded attachment evidence
+- Browser text help, optional voice input, and optional read-only Shopify order lookup
 - Channel-neutral conversations with explicit routing to support, sales, both, or no work
 - Signed WhatsApp text ingress and conversation-owned replies
 - Canonical parties, CRM relationships, sourced activities, and scheduled follow-ups

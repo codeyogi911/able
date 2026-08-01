@@ -4,9 +4,9 @@ This document is the implementation contract for the first public-ready Morrow D
 
 ## Product boundary
 
-V1 includes case queues and search, complete case workspaces, manual case opening, public replies, private notes, status, priority, category, assignment, customer corrections, knowledge articles, attachments, magic-link customer threads, inbound email, agent-customizable rich outbound notifications, manually recorded phone cases, signed WhatsApp text conversations with explicit Desk/CRM routing and conversation-owned replies, immutable audit evidence, operational diagnostics, canonical Directory adoption, first-class CRM sales leads, CRM relationship state, sourced activities, scheduled follow-ups, cross-module customer context, operation closure contracts, and inactive improvement proposals with independent evaluation records.
+V1 includes case queues and search, complete case workspaces, manual case opening, public replies, private notes, status, priority, category, assignment, customer corrections, knowledge articles, attachments, magic-link customer threads, inbound email, agent-customizable rich outbound notifications, browser text and optional voice assistance, optional read-only Shopify order lookup, manually recorded phone cases, signed WhatsApp text conversations with explicit Desk/CRM routing and conversation-owned replies, immutable audit evidence, operational diagnostics, canonical Directory adoption, first-class CRM sales leads, CRM relationship state, sourced activities, scheduled follow-ups, cross-module customer context, operation closure contracts, and inactive improvement proposals with independent evaluation records.
 
-V1 excludes customer passwords, community features, live chat, non-WhatsApp social channels, WhatsApp media/templates/status receipts, opportunity/deal pipelines, configurable CRM objects, sales forecasting, store integrations, macros, general workflow automation, SLA timers, analytics, CSAT, custom fields, an integration marketplace, autonomous candidate activation, and multi-tenant SaaS.
+V1 excludes customer passwords, community features, live human chat, telephone-network calling, non-WhatsApp social channels, WhatsApp media/templates/status receipts, opportunity/deal pipelines, configurable CRM objects, sales forecasting, write-capable store integrations, macros, general workflow automation, SLA timers, analytics, CSAT, custom fields, an integration marketplace, autonomous candidate activation, and multi-tenant SaaS.
 
 ## Required interfaces
 
@@ -79,7 +79,7 @@ The public support homepage is an agent conversation that grounds ordinary quest
 - Tool success, provider acceptance, delivery, and business outcome remain distinct states.
 - Runtime evidence may motivate a proposal but cannot activate a prompt, playbook, policy, tool, ontology, model, or code version.
 
-The domain vocabulary is fixed to `open | waiting_on_customer | on_hold | resolved | closed`, `low | normal | high | urgent`, `portal | email | manual | whatsapp`, and `queued | accepted | blocked | failed | indeterminate`. A Conversation is channel evidence; a Case is support work; a Sales Lead is qualification work.
+The domain vocabulary is fixed to `open | waiting_on_customer | on_hold | resolved | closed`, `low | normal | high | urgent`, `portal | email | manual | whatsapp | voice`, and `queued | accepted | blocked | failed | indeterminate`. A Conversation is channel evidence; a Case is support work; a Sales Lead is qualification work.
 
 ## Architecture
 

@@ -33,6 +33,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Scan private identifiers across complete main history
+        if: github.event_name == 'push'
+        env:
+          PUBLIC_HISTORY_DENYLIST: ${{ secrets.MORROW_PRIVATE_DENYLIST }}
+        run: npm run scan:history
       - name: Install pinned Gitleaks
         env:
           GITLEAKS_URL: https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz

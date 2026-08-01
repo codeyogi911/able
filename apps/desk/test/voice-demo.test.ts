@@ -16,7 +16,7 @@ const BRANDING = voiceBranding({
   displayName: 'Example Company',
   logoUrl: 'https://cdn.example.test/logo.png',
   faviconUrl: '/favicon.png',
-  homeUrl: 'https://fix.example.test/',
+  homeUrl: 'https://company.example.test/',
 })
 
 describe('voice demo boundary', () => {
@@ -166,7 +166,7 @@ describe('voice demo boundary', () => {
 
     expect(html).toContain('<title>Example Company support assistant</title>')
     expect(html).toContain('aria-label="Example Company home"')
-    expect(html).toContain('href="https://fix.example.test/"')
+    expect(html).toContain('href="https://company.example.test/"')
     expect(html).toContain('<img class="brand-logo" src="https://cdn.example.test/logo.png" alt="">')
     expect(html).toContain('<link rel="icon" href="/favicon.png">')
     expect(html).toContain('/workspace-theme.css')
