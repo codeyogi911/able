@@ -5,6 +5,7 @@ import process from 'node:process'
 
 const execFile = promisify(execFileCallback)
 const allowedEmailDomains = new Set(['example.com', 'example.net', 'example.org', 'example.test', 'users.noreply.github.com'])
+const allowedEmailAddresses = new Set(['noreply@github.com'])
 
 async function git(args, options = {}) {
   try {
@@ -26,7 +27,9 @@ function privateTokens() {
 function personalEmails(history) {
   return [...new Set(history.split(/\r?\n/).map((value) => value.trim()).filter(Boolean))]
     .filter((email) => {
-      const domain = email.toLowerCase().split('@')[1]
+      const normalizedEmail = email.toLowerCase()
+      if (allowedEmailAddresses.has(normalizedEmail)) return false
+      const domain = normalizedEmail.split('@')[1]
       return !allowedEmailDomains.has(domain)
     })
 }
