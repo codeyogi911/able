@@ -1,5 +1,7 @@
 # Architecture
 
+For the system at a glance, start with the [architecture overview](architecture-overview.md). This document defines the detailed boundaries behind that diagram.
+
 Morrow Desk is one Cloudflare Worker with Hono JSX server rendering, static assets, D1, a private R2 bucket, Email Service, a rate-limit binding, and a retry cron. The V1 product has no browser SPA or live-chat state. Verified browser voice support adds one Agents SDK Durable Object: Turnstile and a short-lived email OTP bind a customer identity to one WebSocket connection, then narrow bridge methods can open Helpdesk cases or read status only for that verified email. The model never supplies the customer identity. Portal branding is deployment data behind one shared validator: `/ops/settings` and the admin-only MCP customization tool write the same bounded identity, asset URL, color, and font fields and emit the same audit event. Customer email templates are separate audited deployment data: the admin MCP tool validates known brace placeholders, stores plain-text and Markdown variants, and sanitizes rich HTML before it enters the durable outbox.
 
 ## Deep modules
@@ -61,3 +63,5 @@ Email places the capability in the URL fragment of `/requests/access`, so it is 
 Workspace settings and operators are deployment-wide. Directory identity, context envelopes, operation closures, audit, operation receipts, attachments, delivery, provenance, and inactive improvement records are shared substrate. A business module may reuse that substrate but cannot reach into another module's tables or lifecycle logic.
 
 See [ADR 0001](adr/0001-agent-first-suite.md) for the long-term module rule and [ADR 0002](adr/0002-agent-first-desk-crm-foundation.md) for the Desk + CRM and closed-loop decisions.
+
+A richer cross-module relationship view is proposed as a rebuildable, read-only projection in [the bounded context graph proposal](context-graph.md). It is not part of the implemented V1 architecture or a source of business truth.
