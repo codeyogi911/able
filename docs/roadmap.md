@@ -25,12 +25,13 @@ The V1 foundation includes a Desk + CRM tracer over the shared substrate, MCP-fi
 - **Communications:** WhatsApp media, templates, and `sent`/`delivered`/`read` status projection as explicit pilot gates; further channels only when their verification and reply-window invariants are owned, not adapted in.
 - **Voice:** telephone-network calling only behind a real availability/queue/timeout/receipt/fallback state machine and a telephony provider; until then the channel never claims calls or live-human transfer. Prioritize measured end-to-end latency, barge-in behavior, and truthful fallback states before expanding the channel.
 - **CRM:** opportunity and pipeline commands beyond the relationship tracer; fuzzy entity-resolution candidates with explicit merge/split workflows (candidates never become equality automatically).
+- **Bounded context graph:** evaluate a rebuildable D1 node-and-edge projection behind one read-only context lens. Add Vectorize only if measured seed discovery needs semantic help; see [the proposal](context-graph.md).
 - **Controlled improvement:** recovery-console controls for version manifests, bounded rollout, promotion, and rollback; tenant adaptation activation stays separately authorized and off by default.
 
 ## Later — the suite
 
 - Inventory, purchasing, orders, and accounting as deep vertical modules with small agent interfaces, reusing identity, context envelopes, receipts, audit, files, delivery, and provenance — never each other's private tables.
-- A dedicated graph or semantic store only when measured cross-module query value justifies it.
+- A dedicated external graph database only when measured traversal or scale evidence shows the D1 projection is the limiting factor.
 - Externally delegated agent-to-agent operation only after the delegation model in ADR 0002 gains explicit fields and authorization.
 
 ## Standing non-goals

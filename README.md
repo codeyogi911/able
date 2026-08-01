@@ -9,7 +9,9 @@ Morrow Desk is the first application. It combines a support desk, customer direc
 
 > **Project status:** early V1. The architecture and core Desk flows are implemented and tested, but Morrow does not yet claim production readiness. A deployed Worker is not, by itself, an operational support desk.
 
-[Project site](https://codeyogi911.github.io/morrow-site/) · [V1 contract](docs/product-v1.md) · [Roadmap](docs/roadmap.md) · [Architecture](docs/architecture.md)
+[Project site](https://codeyogi911.github.io/morrow-site/) · [V1 contract](docs/product-v1.md) · [Roadmap](docs/roadmap.md) · [Architecture overview](docs/architecture-overview.md) · [Architecture reference](docs/architecture.md)
+
+![Morrow Desk architecture overview](docs/assets/architecture-overview.svg)
 
 ## Why agent-first
 
@@ -41,7 +43,7 @@ morrow/
 ├── apps/
 │   └── desk/          # Buildable Desk Worker, migrations, tests, assets, and configs
 ├── packages/          # Future reusable modules, extracted only behind proven interfaces
-├── docs/              # Product contract, architecture, ADRs, deployment, and roadmap
+├── docs/              # Product contract, architecture visuals, ADRs, deployment, and roadmap
 ├── scripts/           # Repository-wide publication and history gates
 └── .github/           # CI, security scanning, and contributor templates
 ```

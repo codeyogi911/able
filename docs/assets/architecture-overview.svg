@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="940" viewBox="0 0 1400 940" role="img" aria-labelledby="title desc">
+  <title id="title">Morrow Desk architecture overview</title>
+  <desc id="desc">Operator agents and customer channels enter a Cloudflare Worker through narrow adapters. Deep Communications, Helpdesk, Directory, CRM, Operations, and Improvement modules own policy. D1, R2, queues, a Durable Object, Workers AI, Images, Email Service, and external providers form the platform layer.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#5d6965"/>
+    </marker>
+    <style>
+      .title { font: 700 42px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17211f; letter-spacing: -1.5px; }
+      .subtitle { font: 400 18px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #5d6965; }
+      .eyebrow { font: 700 13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #8d3121; letter-spacing: 1.6px; }
+      .section { font: 700 19px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17211f; }
+      .label { font: 700 15px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #17211f; }
+      .small { font: 400 13px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #5d6965; }
+      .inverse { fill: #fffdfa; }
+      .inverse-muted { fill: #c6d0c9; }
+      .panel { fill: #fffdfa; stroke: #d7dbd2; stroke-width: 1.5; }
+      .soft { fill: #dce5d6; stroke: #c6d1bf; stroke-width: 1.5; }
+      .sand { fill: #eee4d8; stroke: #d9ccbd; stroke-width: 1.5; }
+      .module { fill: #fffdfa; stroke: #91a096; stroke-width: 1.5; }
+      .line { fill: none; stroke: #5d6965; stroke-width: 2; marker-end: url(#arrow); }
+      .hairline { fill: none; stroke: #aab3ad; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="940" fill="#f6f4ee"/>
+  <text class="eyebrow" x="60" y="54">CURRENT V1</text>
+  <text class="title" x="60" y="101">Morrow Desk on Cloudflare</text>
+  <text class="subtitle" x="60" y="132">Small agent interfaces at the edge; business truth stays inside deep modules.</text>
+
+  <rect class="soft" x="60" y="175" width="490" height="130" rx="16"/>
+  <text class="section" x="86" y="210">Operator plane</text>
+  <rect class="panel" x="86" y="230" width="188" height="52" rx="10"/>
+  <text class="label" x="180" y="253" text-anchor="middle">Agent clients</text>
+  <text class="small" x="180" y="271" text-anchor="middle">Claude · Codex · MCP hosts</text>
+  <path class="line" d="M282 256 H342"/>
+  <rect class="panel" x="350" y="230" width="174" height="52" rx="10"/>
+  <text class="label" x="437" y="253" text-anchor="middle">Cloudflare Access</text>
+  <text class="small" x="437" y="271" text-anchor="middle">verified operator identity</text>
+
+  <rect class="sand" x="580" y="175" width="760" height="130" rx="16"/>
+  <text class="section" x="606" y="210">Customer channels</text>
+  <rect class="panel" x="606" y="230" width="214" height="52" rx="10"/>
+  <text class="label" x="713" y="253" text-anchor="middle">Portal · KB · browser voice</text>
+  <text class="small" x="713" y="271" text-anchor="middle">capabilities · Turnstile · rate limits</text>
+  <rect class="panel" x="840" y="230" width="218" height="52" rx="10"/>
+  <text class="label" x="949" y="253" text-anchor="middle">Email</text>
+  <text class="small" x="949" y="271" text-anchor="middle">ingress · durable delivery</text>
+  <rect class="panel" x="1078" y="230" width="236" height="52" rx="10"/>
+  <text class="label" x="1196" y="253" text-anchor="middle">WhatsApp</text>
+  <text class="small" x="1196" y="271" text-anchor="middle">signed webhook · explicit routing</text>
+
+  <path class="line" d="M437 305 V342"/>
+  <path class="line" d="M713 305 V342"/>
+  <path class="line" d="M949 305 V342"/>
+  <path class="line" d="M1196 305 V342"/>
+
+  <rect x="60" y="350" width="1280" height="390" rx="20" fill="#17211f"/>
+  <text class="eyebrow inverse-muted" x="86" y="385">ONE CLOUDFLARE WORKER</text>
+  <text class="section inverse" x="86" y="416">Task-shaped adapters</text>
+
+  <rect x="86" y="438" width="218" height="58" rx="10" fill="#263330" stroke="#4e5d58"/>
+  <text class="label inverse" x="195" y="463" text-anchor="middle">MCP + MCP App</text>
+  <text class="small inverse-muted" x="195" y="482" text-anchor="middle">normal operator interface</text>
+  <rect x="324" y="438" width="218" height="58" rx="10" fill="#263330" stroke="#4e5d58"/>
+  <text class="label inverse" x="433" y="463" text-anchor="middle">Portal + knowledge</text>
+  <text class="small inverse-muted" x="433" y="482" text-anchor="middle">accessible public interface</text>
+  <rect x="562" y="438" width="218" height="58" rx="10" fill="#263330" stroke="#4e5d58"/>
+  <text class="label inverse" x="671" y="463" text-anchor="middle">Email + WhatsApp</text>
+  <text class="small inverse-muted" x="671" y="482" text-anchor="middle">channel translation</text>
+  <rect x="800" y="438" width="218" height="58" rx="10" fill="#263330" stroke="#4e5d58"/>
+  <text class="label inverse" x="909" y="463" text-anchor="middle">Voice bridge</text>
+  <text class="small inverse-muted" x="909" y="482" text-anchor="middle">verified session · narrow RPC</text>
+  <rect x="1038" y="438" width="276" height="58" rx="10" fill="#263330" stroke="#4e5d58"/>
+  <text class="label inverse" x="1176" y="463" text-anchor="middle">/ops recovery</text>
+  <text class="small inverse-muted" x="1176" y="482" text-anchor="middle">small Access-protected surface</text>
+
+  <path class="hairline" d="M86 526 H1314"/>
+  <text class="small inverse-muted" x="700" y="548" text-anchor="middle">Adapters authenticate, translate, and render. They do not own business policy.</text>
+  <text class="section inverse" x="86" y="582">Deep business modules</text>
+
+  <rect class="module" x="86" y="604" width="188" height="82" rx="12"/>
+  <text class="label" x="180" y="635" text-anchor="middle">Communications</text>
+  <text class="small" x="180" y="655" text-anchor="middle">channels · addressing</text>
+  <text class="small" x="180" y="672" text-anchor="middle">provider evidence</text>
+  <rect class="module" x="294" y="604" width="188" height="82" rx="12"/>
+  <text class="label" x="388" y="635" text-anchor="middle">Helpdesk</text>
+  <text class="small" x="388" y="655" text-anchor="middle">cases · lifecycle</text>
+  <text class="small" x="388" y="672" text-anchor="middle">revisions · audit</text>
+  <rect class="module" x="502" y="604" width="188" height="82" rx="12"/>
+  <text class="label" x="596" y="635" text-anchor="middle">Directory</text>
+  <text class="small" x="596" y="655" text-anchor="middle">parties · contact points</text>
+  <text class="small" x="596" y="672" text-anchor="middle">source links</text>
+  <rect class="module" x="710" y="604" width="188" height="82" rx="12"/>
+  <text class="label" x="804" y="635" text-anchor="middle">CRM</text>
+  <text class="small" x="804" y="655" text-anchor="middle">relationships · activity</text>
+  <text class="small" x="804" y="672" text-anchor="middle">follow-ups</text>
+  <rect class="module" x="918" y="604" width="188" height="82" rx="12"/>
+  <text class="label" x="1012" y="635" text-anchor="middle">Operations</text>
+  <text class="small" x="1012" y="655" text-anchor="middle">receipts · outcomes</text>
+  <text class="small" x="1012" y="672" text-anchor="middle">reconciliation</text>
+  <rect class="module" x="1126" y="604" width="188" height="82" rx="12"/>
+  <text class="label" x="1220" y="635" text-anchor="middle">Improvement</text>
+  <text class="small" x="1220" y="655" text-anchor="middle">proposals · evaluation</text>
+  <text class="small" x="1220" y="672" text-anchor="middle">inactive in V1</text>
+
+  <text class="small inverse-muted" x="700" y="720" text-anchor="middle">Cross-module work uses public interfaces and revisioned context envelopes.</text>
+
+  <path class="line" d="M700 740 V778"/>
+  <rect class="panel" x="60" y="778" width="1280" height="112" rx="16"/>
+  <text class="section" x="86" y="811">Cloudflare platform and delivery</text>
+
+  <rect class="soft" x="86" y="830" width="176" height="40" rx="9"/>
+  <text class="label" x="174" y="855" text-anchor="middle">D1 · canonical state</text>
+  <rect class="soft" x="278" y="830" width="168" height="40" rx="9"/>
+  <text class="label" x="362" y="855" text-anchor="middle">Private R2 · files</text>
+  <rect class="soft" x="462" y="830" width="184" height="40" rx="9"/>
+  <text class="label" x="554" y="855" text-anchor="middle">Queues + retry cron</text>
+  <rect class="soft" x="662" y="830" width="188" height="40" rx="9"/>
+  <text class="label" x="756" y="855" text-anchor="middle">DO · voice session</text>
+  <rect class="soft" x="866" y="830" width="190" height="40" rx="9"/>
+  <text class="label" x="961" y="855" text-anchor="middle">Workers AI + Images</text>
+  <rect class="sand" x="1072" y="830" width="242" height="40" rx="9"/>
+  <text class="label" x="1193" y="855" text-anchor="middle">Email + external providers</text>
+
+  <text class="subtitle" x="700" y="922" text-anchor="middle">Authenticate → load a bounded workspace → commit state + audit + receipt → deliver asynchronously → observe outcome</text>
+</svg>
