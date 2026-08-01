@@ -35,7 +35,9 @@ function relative(filename) {
 function personalEmails(text) {
   const matches = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? []
   return matches.filter((email) => {
-    const domain = email.toLowerCase().split('@')[1]
+    const normalizedEmail = email.toLowerCase()
+    if (normalizedEmail === 'noreply@github.com') return false
+    const domain = normalizedEmail.split('@')[1]
     return !['example.com', 'example.net', 'example.org', 'example.test', 'users.noreply.github.com'].includes(domain)
   })
 }
