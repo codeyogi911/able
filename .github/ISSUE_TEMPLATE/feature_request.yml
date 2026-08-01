@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose a capability or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Read docs/roadmap.md and ADR 0001 first — Morrow Desk deliberately builds deep modules behind small agent interfaces and declines speculative plug-in frameworks. Proposals that fit the architecture land much faster.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: The user or operator outcome that is currently impossible or painful. Describe the problem, not the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What should happen, at which surface (portal, MCP, channel, ops), and what stays out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: fit
+    attributes:
+      label: Architecture fit
+      description: Which module owns this, and why it does not need a new framework. Reference the roadmap or an ADR if relevant.
+    validations:
+      required: false

@@ -1,0 +1,37 @@
+name: Bug report
+description: Something behaves incorrectly or breaks
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Strip customer names, hostnames, resource identifiers, and secrets from everything below — this repository is tenant-neutral and reports must be too. For suspected vulnerabilities, do NOT file an issue; follow SECURITY.md instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what actually happened.
+      placeholder: Steps to reproduce, expected behavior, actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: surface
+    attributes:
+      label: Where
+      description: Which surface is affected — portal, /ops, MCP tools, voice/chat channel, email, WhatsApp adapter, migrations, CI.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Commit or release version, wrangler version, Node version, and whether this is local dev (`npm run dev`) or a deployed Worker.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs or evidence
+      description: Relevant output with identifiers redacted. `npm run check` results are useful when the bug is reproducible locally.
+    validations:
+      required: false

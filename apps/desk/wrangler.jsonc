@@ -1,0 +1,91 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "morrow",
+  "main": "src/worker.tsx",
+  "workers_dev": false,
+  "preview_urls": false,
+  "compatibility_date": "2026-07-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./public",
+    "run_worker_first": ["/", "/healthz", "/mcp", "/ops", "/ops/*", "/webhooks/whatsapp", "/kb*", "/requests*", "/workspace-theme.css", "/portal/*", "/voice", "/demo/voice", "/agents/*"]
+  },
+  "vars": {
+    "MORROW_VOICE_DEMO_ENABLED": "1"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MorrowDeskAgent",
+        "class_name": "MorrowDeskAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1_voice_demo",
+      "new_sqlite_classes": ["MorrowDeskAgent"]
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "morrow",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ATTACHMENTS"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "MEDIA_QUEUE",
+        "queue": "morrow-media"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "morrow-media",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3
+      }
+    ]
+  },
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
+  "images": {
+    "binding": "IMAGES"
+  },
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "PUBLIC_RATE_LIMIT",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
+  }
+}

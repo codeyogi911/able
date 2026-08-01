@@ -1,0 +1,49 @@
+{
+  "name": "morrow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent-first ERP for service businesses, with Morrow Desk as the first application.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": "^22.22.0 || ^24.0.0"
+  },
+  "scripts": {
+    "build": "npm run build:assets",
+    "build:assets": "npm run build:assets --workspace @morrow/desk",
+    "dev": "npm run dev --workspace @morrow/desk",
+    "deploy": "npm run deploy --workspace @morrow/desk",
+    "deploy:production": "npm run deploy:production --workspace @morrow/desk",
+    "build:production-config": "npm run build:production-config --workspace @morrow/desk",
+    "types": "npm run types --workspace @morrow/desk",
+    "typecheck": "npm run typecheck --workspace @morrow/desk",
+    "test": "npm run test --workspace @morrow/desk",
+    "test:visual": "npm run test:visual --workspace @morrow/desk",
+    "eval:voice": "npm run eval:voice --workspace @morrow/desk",
+    "db:migrate:local": "npm run db:migrate:local --workspace @morrow/desk",
+    "db:migrate:remote": "npm run db:migrate:remote --workspace @morrow/desk",
+    "scan:public": "node scripts/scan-public-readiness.mjs",
+    "scan:history": "node scripts/scan-public-history.mjs",
+    "check": "npm run check --workspace @morrow/desk && npm run scan:public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codeyogi911/morrow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/codeyogi911/morrow/issues"
+  },
+  "homepage": "https://codeyogi911.github.io/morrow-site/",
+  "keywords": [
+    "erp",
+    "customer-support",
+    "crm",
+    "mcp",
+    "ai-agents",
+    "cloudflare-workers"
+  ]
+}

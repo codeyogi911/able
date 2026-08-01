@@ -1,0 +1,274 @@
+import { describe, expect, it } from 'vitest'
+import {
+  contactContinuationMessage,
+  hasVoiceContact,
+  normalizeVoiceContact,
+} from '../src/voice/contact'
+import { HUMAN_HELP_MESSAGE, classifyEscalation, isTicketStatusRequest } from '../src/voice/escalation'
+import {
+  isVoiceDemoAgentPath,
+  voiceBranding,
+  voiceDemoEnabled,
+  voiceDemoPageResponse,
+} from '../src/voice/demo-page'
+
+const BRANDING = voiceBranding({
+  displayName: 'Example Company',
+  logoUrl: 'https://cdn.example.test/logo.png',
+  faviconUrl: '/favicon.png',
+  homeUrl: 'https://fix.example.test/',
+})
+
+describe('voice demo boundary', () => {
+  it('is fail-closed unless the exact demo flag is enabled', () => {
+    expect(voiceDemoEnabled({})).toBe(false)
+    expect(voiceDemoEnabled({ MORROW_VOICE_DEMO_ENABLED: 'true' })).toBe(false)
+    expect(voiceDemoEnabled({ MORROW_VOICE_DEMO_ENABLED: '1' })).toBe(true)
+    expect(isVoiceDemoAgentPath('/agents/morrow-desk-agent/session-1')).toBe(true)
+    expect(isVoiceDemoAgentPath('/agents/another-agent/session-1')).toBe(false)
+  })
+
+  it('renders a no-store, CSP-protected page that opens without an upfront contact gate', async () => {
+    const response = voiceDemoPageResponse(BRANDING, 'turnstile-site-key')
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'none'")
+    expect(response.headers.get('content-security-policy')).toContain('https://challenges.cloudflare.com')
+    expect(response.headers.get('content-security-policy')).toContain('worker-src blob:')
+    expect(response.headers.get('content-security-policy')).toContain("img-src 'self' data: https:")
+    expect(response.headers.get('permissions-policy')).toContain('microphone=(self)')
+    // The contact card parks hidden inside the transcript; identity is asked
+    // for mid-conversation, not before it.
+    expect(html).toContain('<li class="bubble-row bubble-row--assistant" id="contact-flow" hidden>')
+    expect(html).toContain('id="contact-form"')
+    expect(html).toContain('name="name"')
+    expect(html).toContain('type="email"')
+    expect(html).not.toContain('type="tel"')
+    expect(html).toContain('Who should the team follow up with?')
+    expect(html).toContain('id="session-turnstile"')
+    expect(html).toContain('data-sitekey="turnstile-site-key"')
+    expect(html).toContain('id="landing-status"')
+    expect(html).toContain('<h1 id="help-title">How can we help?</h1>')
+    expect(html.match(/<h1\b/g)).toHaveLength(1)
+    expect(html).toContain('role="log"')
+    expect(html).toContain('She answers from our help articles and can bring in the team when you need them.')
+    expect(html).toContain('Ava requests contact details only for team follow-up.')
+    expect(html).toContain('id="landing-input"')
+    expect(html).toContain('aria-label="Ask anything"')
+    expect(html.indexOf('id="session-turnstile"')).toBeLessThan(html.indexOf('id="thread"'))
+    expect(html).toContain('/voice-demo.js')
+    expect(html).toContain('/voice-demo.css')
+    expect(html).not.toContain('id="call-otp-form"')
+    expect(html.toLowerCase()).not.toContain('otp')
+  })
+
+  it('advertises order lookup only when Shopify is configured', async () => {
+    const ticketsOnly = await voiceDemoPageResponse(BRANDING, 'turnstile-site-key').text()
+    const withOrders = await voiceDemoPageResponse(BRANDING, 'turnstile-site-key', true).text()
+
+    expect(ticketsOnly).not.toContain('order help')
+    expect(ticketsOnly).toContain('only for team follow-up')
+    expect(withOrders).toContain('only for order help or team follow-up')
+  })
+
+  it('parks a hidden progressive verification card for order read-back', async () => {
+    const response = voiceDemoPageResponse(BRANDING, 'turnstile-site-key')
+    const html = await response.text()
+
+    expect(html).toContain('<li id="verify-card" class="bubble-row bubble-row--assistant" hidden>')
+    expect(html).toContain('To share order details I need to confirm this email is yours.')
+    expect(html).toContain('autocomplete="one-time-code"')
+    expect(html).toContain('id="verify-turnstile"')
+    expect(html).toContain('Email me a code')
+    // The contact step itself must not claim or require verification.
+    const contactCard = html.slice(html.indexOf('id="contact-form"'), html.indexOf('</form>'))
+    expect(contactCard.toLowerCase()).not.toContain('verif')
+  })
+
+  it('renders an agent-first landing with voice as a secondary control', async () => {
+    const response = voiceDemoPageResponse(BRANDING, 'turnstile-site-key')
+    const html = await response.text()
+
+    expect(html).toContain('Ask Ava anything about Example Company.')
+
+    // A display name that already ends in "Support" must not double the word
+    // in copy that addresses the workspace by its short name.
+    const suffixed = voiceBranding({
+      displayName: 'Example Company Support',
+      logoUrl: null,
+      faviconUrl: null,
+      homeUrl: null,
+    })
+    const suffixedHtml = await voiceDemoPageResponse(suffixed, 'turnstile-site-key').text()
+    expect(suffixedHtml).toContain('Ask Ava anything about Example Company.')
+    expect(suffixedHtml).not.toContain('Ask Ava anything about Example Company Support.')
+    expect(html).toContain('Support assistant')
+    expect(html).toContain('id="text-form"')
+    expect(html).toContain('id="landing-form"')
+    expect(html).toContain('placeholder="Ask a follow-up…"')
+    expect(html).not.toContain('Getting the chat ready')
+    expect(html).toContain('id="mic-button"')
+    expect(html).toContain('id="landing-mic-button"')
+    expect(html).toContain('aria-label="Use voice"')
+    expect(html).toContain('title="Talk instead of typing"')
+    expect(html).toContain('Start over')
+    expect(html).toContain('href="/kb">Browse help</a>')
+    expect(html).toContain('id="human-help-button"')
+    expect(html).toContain('id="conversation-human-button"')
+    expect(html).toContain('id="reconnect-banner"')
+    expect(html).not.toContain('class="privacy-note"')
+    expect(html).toContain('viewport-fit=cover')
+
+    // The landing is the primary state; progressive cards remain parked in
+    // the hidden transcript until the agent needs them.
+    const thread = html.indexOf('id="thread"')
+    const transcript = html.indexOf('id="transcript"')
+    const contactFlow = html.indexOf('id="contact-flow"')
+    const contactForm = html.indexOf('id="contact-form"')
+    const composer = html.indexOf('id="text-form"')
+    expect(thread).toBeGreaterThan(-1)
+    expect(transcript).toBeGreaterThan(thread)
+    expect(contactFlow).toBeGreaterThan(transcript)
+    expect(contactForm).toBeGreaterThan(contactFlow)
+    expect(composer).toBeGreaterThan(contactForm)
+  })
+
+  it('renders escaped live help topics with conventional knowledge links', async () => {
+    const html = await voiceDemoPageResponse(BRANDING, '', false, [{
+      slug: 'machines & care',
+      name: 'Machines & <care>',
+      description: 'Set up & maintain your machine.',
+      articles: [
+        { slug: 'first <setup>', title: 'First <setup>' },
+        { slug: 'second', title: 'Second' },
+        { slug: 'third', title: 'Third' },
+        { slug: 'fourth', title: 'Fourth should not render' },
+      ],
+    }]).text()
+
+    expect(html).toContain('Browse by topic')
+    expect(html).toContain('/kb?section=machines%20%26%20care')
+    expect(html).toContain('Machines &amp; &lt;care&gt;')
+    expect(html).toContain('Set up &amp; maintain your machine.')
+    expect(html).toContain('/kb/first%20%3Csetup%3E')
+    expect(html).toContain('First &lt;setup&gt;')
+    expect(html).toContain('/kb/third')
+    expect(html).not.toContain('/kb/fourth')
+    expect(html).not.toContain('Fourth should not render')
+    expect(html).not.toContain('role="search"')
+  })
+
+  it('brands the page from workspace settings and links the workspace theme first', async () => {
+    const response = voiceDemoPageResponse(BRANDING, 'turnstile-site-key')
+    const html = await response.text()
+
+    expect(html).toContain('<title>Example Company support assistant</title>')
+    expect(html).toContain('aria-label="Example Company home"')
+    expect(html).toContain('href="https://fix.example.test/"')
+    expect(html).toContain('<img class="brand-logo" src="https://cdn.example.test/logo.png" alt="">')
+    expect(html).toContain('<link rel="icon" href="/favicon.png">')
+    expect(html).toContain('/workspace-theme.css')
+    expect(html.indexOf('/workspace-theme.css')).toBeLessThan(html.indexOf('/voice-demo.css'))
+    expect(html).toContain('<meta name="color-scheme" content="light">')
+  })
+
+  it('falls back to a monogram, home link, and escaped values without optional branding', async () => {
+    const branding = voiceBranding({
+      displayName: 'Rock & Roll Support',
+      logoUrl: 'javascript:alert(1)',
+      faviconUrl: null,
+      homeUrl: 'http://insecure.example.test/',
+    })
+    const response = voiceDemoPageResponse(branding)
+    const html = await response.text()
+
+    expect(branding.logoUrl).toBeNull()
+    expect(branding.homeUrl).toBeNull()
+    expect(html).toContain('<title>Rock &amp; Roll Support — assistant</title>')
+    expect(html).toContain('<span class="brand-mark" aria-hidden="true">RR</span>')
+    expect(html).toContain('aria-label="Rock &amp; Roll Support home"')
+    expect(html).toContain('href="/"')
+    expect(html).not.toContain('javascript:alert')
+    expect(html).not.toContain('rel="icon"')
+  })
+
+  it('removes the demo chrome from the customer-facing page', async () => {
+    const response = voiceDemoPageResponse(BRANDING, 'turnstile-site-key')
+    const html = await response.text()
+
+    expect(html).not.toContain('Flux STT')
+    expect(html).not.toContain('Try an escalation trigger')
+    expect(html).not.toContain('Deterministic safety net')
+    expect(html).not.toContain('data-prompt')
+    expect(html).not.toContain('id="metrics"')
+    expect(html).not.toContain('Cloudflare-native path')
+    expect(html).not.toContain('demo session')
+    expect(html).not.toContain('Morrow Desk')
+    expect(html).not.toContain('Live browser call')
+    expect(html).not.toContain('Live transcript')
+    expect(html).not.toContain('voice-orb')
+    expect(html).not.toContain('audio-level')
+    expect(html).not.toContain('connection-badge')
+    expect(html).not.toContain('Start browser call')
+    expect(html).toContain('<h1 id="help-title">How can we help?</h1>')
+    expect(html).not.toContain('Shopify')
+    expect(html).toContain('id="handoff-card"')
+    expect(html).toContain('id="handoff-reference"')
+  })
+
+  it.each([
+    ['Please let me speak to a real person', 'explicit_human_request'],
+    ['The plug sparked and now the machine is smoking', 'safety_risk'],
+    ['Someone else accessed my account', 'account_security'],
+    ['I was charged twice and want a refund', 'payment_or_refund'],
+    ['This is a privacy request: delete my data', 'privacy_or_legal'],
+    ['I already tried that and it is still not working', 'repeated_failure'],
+  ] as const)('escalates %s as %s', (transcript, expected) => {
+    expect(classifyEscalation(transcript)).toBe(expected)
+  })
+
+  it('leaves a routine care question with the voice model', () => {
+    expect(classifyEscalation('How should I clean the printer rollers?')).toBeNull()
+  })
+
+  it('routes the landing human-help action through deterministic JIT escalation', () => {
+    expect(classifyEscalation(HUMAN_HELP_MESSAGE)).toBe('explicit_human_request')
+  })
+
+  it('routes serious-category ticket status questions to status lookup instead of opening duplicates', () => {
+    expect(isTicketStatusRequest('What is the status of my refund ticket MD-123?')).toBe(true)
+    expect(isTicketStatusRequest('Has my refund been processed?')).toBe(true)
+    expect(isTicketStatusRequest('I need a refund because I was charged twice.')).toBe(false)
+    expect(classifyEscalation('Any update on my ticket? The machine is now smoking.')).toBe('safety_risk')
+  })
+
+  it('normalizes name and email while discarding untrusted extra fields', () => {
+    expect(normalizeVoiceContact({
+      email: 'CALLER@example.test',
+      name: '  Ada Customer  ',
+      phone: '+65 9123 4567',
+    })).toEqual({ name: 'Ada Customer', email: 'caller@example.test' })
+    expect(normalizeVoiceContact({ name: 'Ada', email: 'not-an-email' })).toBeNull()
+    expect(normalizeVoiceContact({ email: 'ada@example.test' })).toBeNull()
+    expect(normalizeVoiceContact({})).toBeNull()
+  })
+
+  it('resumes the exact action interrupted by the contact card', () => {
+    expect(contactContinuationMessage('open_ticket')).toContain('support ticket I requested')
+    expect(contactContinuationMessage('order_lookup')).toContain('order number I already gave')
+    expect(contactContinuationMessage('product_help')).toContain('Ask me for my order number')
+    expect(contactContinuationMessage('handled')).toBeNull()
+    expect(contactContinuationMessage('unknown')).toBe('I have shared my name and email.')
+  })
+
+  it('gates identity-bearing actions on a server-held contact', () => {
+    expect(hasVoiceContact({ contact: { name: 'Ada', email: 'ada@example.test' } })).toBe(true)
+    expect(hasVoiceContact({ contact: null })).toBe(false)
+    expect(hasVoiceContact({ contact: { name: 'Ada', email: 'not-an-email' } })).toBe(false)
+    expect(hasVoiceContact({ contact: { email: 'ada@example.test' } })).toBe(false)
+    expect(hasVoiceContact({ verifiedContact: { email: 'ada@example.test' } })).toBe(false)
+    expect(hasVoiceContact(null)).toBe(false)
+  })
+})

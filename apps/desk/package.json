@@ -1,0 +1,113 @@
+{
+  "name": "@morrow/desk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Morrow Desk: an agent-native support desk and CRM on Cloudflare Workers.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": "^22.22.0 || ^24.0.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "MORROW_OPERATOR_HOSTNAME": {
+        "description": "Bare dedicated operator hostname carrying both /mcp and /ops behind one domain-wide Cloudflare Access application."
+      },
+      "CF_ACCESS_AUD": {
+        "description": "Cloudflare Access application audience for the dedicated operator hostname."
+      },
+      "CF_ACCESS_TEAM_DOMAIN": {
+        "description": "Your Access issuer host, such as your-team.cloudflareaccess.com."
+      },
+      "MORROW_OWNER_EMAIL": {
+        "description": "The first Access-approved operator who should become the workspace administrator."
+      },
+      "TURNSTILE_SECRET_KEY": {
+        "description": "The secret for the Turnstile widget protecting public portal writes."
+      },
+      "TURNSTILE_SITE_KEY": {
+        "description": "The matching Turnstile site key rendered by the public portal."
+      },
+      "CUSTOMER_CAPABILITY_SECRET": {
+        "description": "A random value of at least 32 characters used to derive per-case customer capabilities."
+      },
+      "WHATSAPP_VERIFY_TOKEN": {
+        "description": "A private random token that Meta must echo during WhatsApp webhook verification."
+      },
+      "WHATSAPP_APP_SECRET": {
+        "description": "The Meta app secret used to verify WhatsApp webhook request signatures."
+      },
+      "WHATSAPP_ACCESS_TOKEN": {
+        "description": "A least-authority Meta system-user token for sending through the WhatsApp Cloud API."
+      },
+      "WHATSAPP_PHONE_NUMBER_ID": {
+        "description": "The Meta phone-number ID for this deployment's WhatsApp sender."
+      },
+      "WHATSAPP_WABA_ID": {
+        "description": "The WhatsApp Business Account ID accepted by this deployment's webhook."
+      }
+    }
+  },
+  "scripts": {
+    "build:mcp-app": "node scripts/build-mcp-app.mjs",
+    "build:voice-demo": "node scripts/build-voice-demo.mjs",
+    "build:portal-search": "node scripts/build-portal-search.mjs",
+    "build:assets": "npm run build:mcp-app && npm run build:voice-demo && npm run build:portal-search",
+    "dev": "npm run build:assets && wrangler dev",
+    "deploy": "npm run build:assets && wrangler deploy",
+    "build:production-config": "node scripts/production-config.mjs",
+    "deploy:production": "node scripts/require-main-build.mjs && npm run build:production-config && wrangler d1 migrations apply DB --remote --config wrangler.production.generated.json && npm run build:assets && wrangler deploy --config wrangler.production.generated.json",
+    "types": "wrangler types --include-runtime=false",
+    "typecheck": "tsc --noEmit",
+    "typecheck:mcp-app": "tsc -p tsconfig.mcp-app.json",
+    "typecheck:voice-demo": "tsc -p tsconfig.voice-demo.json",
+    "typecheck:portal-search": "tsc -p tsconfig.portal-search.json",
+    "typecheck:voice-eval": "tsc -p tsconfig.voice-eval.json",
+    "test": "vitest run && vitest run --config vitest.node.config.ts",
+    "test:watch": "vitest",
+    "test:visual": "npm run build:assets && playwright test",
+    "eval:voice": "node scripts/run-voice-evals.mjs",
+    "visual:server": "node scripts/visual-server.mjs",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "check:generated": "git diff --exit-code -- src/adapters/mcp/app.generated.ts public/voice-demo.js public/voice-demo.css public/portal-search.js",
+    "check": "npm run build:assets && npm run check:generated && npm run types && npm run typecheck && npm run typecheck:mcp-app && npm run typecheck:voice-demo && npm run typecheck:portal-search && npm run typecheck:voice-eval && npm run test"
+  },
+  "dependencies": {
+    "@cloudflare/voice": "0.3.5",
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "agents": "0.20.1",
+    "ai": "7.0.37",
+    "hono": "^4.12.32",
+    "marked": "^18.0.7",
+    "postal-mime": "^2.7.5",
+    "workers-ai-provider": "4.0.0",
+    "xss": "^1.0.15",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.8",
+    "@cloudflare/workers-types": "^5.20260719.1",
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.28.1",
+    "typescript": "^7.0.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.112.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codeyogi911/morrow.git",
+    "directory": "apps/desk"
+  },
+  "homepage": "https://github.com/codeyogi911/morrow/tree/main/apps/desk",
+  "keywords": [
+    "support-desk",
+    "helpdesk",
+    "crm",
+    "mcp",
+    "ai-agents",
+    "cloudflare-workers"
+  ]
+}

@@ -1,0 +1,8 @@
+# Deploy-button and local-development prompts. Replace every value privately.
+MORROW_OPERATOR_HOSTNAME=operators.example.test
+CF_ACCESS_AUD=replace-with-access-audience
+CF_ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
+MORROW_OWNER_EMAIL=owner@example.com
+TURNSTILE_SECRET_KEY=replace-with-turnstile-secret
+TURNSTILE_SITE_KEY=replace-with-turnstile-site-key
+CUSTOMER_CAPABILITY_SECRET=replace-with-at-least-32-random-characters
