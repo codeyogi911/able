@@ -22,7 +22,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Generate Linux goldens
-        run: npm run test:visual -- --update-snapshots
+        run: npm run test:visual --workspace @morrow/desk -- --update-snapshots
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: morrow-linux-visual-baselines
