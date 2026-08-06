@@ -270,11 +270,22 @@ test('support home opens with the agent as the primary help experience', async (
     const box = element.getBoundingClientRect()
     return { top: box.top, bottom: box.bottom, viewportHeight: window.innerHeight }
   })
+  const sendGeometry = await page.getByRole('button', { name: 'Send question' }).evaluate((element) => {
+    const button = element.getBoundingClientRect()
+    const icon = element.querySelector('svg')?.getBoundingClientRect()
+    return {
+      width: button.width,
+      height: button.height,
+      iconOffsetX: icon ? (icon.left + icon.width / 2) - (button.left + button.width / 2) : null,
+      iconOffsetY: icon ? (icon.top + icon.height / 2) - (button.top + button.height / 2) : null,
+    }
+  })
 
   const width = viewportWidth(testInfo)
   if (width <= 700) {
     expect(composerPosition.top).toBeGreaterThan(composerPosition.viewportHeight * .65)
     expect(composerPosition.bottom).toBeLessThanOrEqual(composerPosition.viewportHeight - 12)
+    expect(sendGeometry).toEqual({ width: 44, height: 44, iconOffsetX: 0, iconOffsetY: 0 })
   } else {
     expect(composerPosition.top).toBeLessThan(composerPosition.viewportHeight * .55)
   }

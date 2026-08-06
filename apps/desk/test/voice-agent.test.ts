@@ -2,6 +2,7 @@ import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 
 import { HUMAN_HELP_MESSAGE } from '../src/voice/escalation'
+import { ORDER_LOOKUP_CONTACT_CONTINUATION } from '../src/voice/contact'
 
 type TestAgentEnv = typeof env & { MorrowDeskAgent: DurableObjectNamespace }
 
@@ -146,6 +147,37 @@ describe('voice agent WebSocket boundary', () => {
 
       await expect(cardRequested).resolves.toMatchObject({ type: 'voice_contact_required', anchor: 'after_reply' })
       await expect(reply).resolves.toMatchObject({ type: 'transcript_end' })
+    } finally {
+      socket.close()
+    }
+  })
+
+  it('continues an order request after contact without repeating the identity request', async () => {
+    const socket = await connectAgent(`order-contact-${crypto.randomUUID()}`)
+    try {
+      await proveSession(socket)
+      const cardRequested = nextMessage(socket, (message) => message.type === 'voice_contact_required')
+      const initialReply = nextMessage(socket, (message) => message.type === 'transcript_end')
+      socket.send(JSON.stringify({ type: 'text_message', text: 'Where is my order?' }))
+
+      await expect(cardRequested).resolves.toMatchObject({ anchor: 'after_reply' })
+      await expect(initialReply).resolves.toMatchObject({
+        text: 'To look up your order, add your name and the email used at checkout in the card below.',
+      })
+
+      const contactSet = nextMessage(socket, (message) => message.type === 'voice_contact_set')
+      socket.send(JSON.stringify({
+        type: 'set_voice_contact',
+        name: 'Local Order Tester',
+        email: 'local-order@example.test',
+      }))
+      await expect(contactSet).resolves.toMatchObject({ continuation: 'order_lookup' })
+
+      const lookupReply = nextMessage(socket, (message) => message.type === 'transcript_end')
+      socket.send(JSON.stringify({ type: 'text_message', text: ORDER_LOOKUP_CONTACT_CONTINUATION }))
+      const result = await lookupReply
+      expect(result).toMatchObject({ text: 'What is the order number from your confirmation email?' })
+      expect(String(result.text)).not.toMatch(/add your name|email.*card/i)
     } finally {
       socket.close()
     }

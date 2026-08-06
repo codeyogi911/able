@@ -17,6 +17,8 @@ import { voiceDemoEnabled } from './demo-page'
 import {
   hasVoiceContact,
   normalizeVoiceContact,
+  ORDER_LOOKUP_CONTACT_CONTINUATION,
+  PRODUCT_HELP_CONTACT_CONTINUATION,
   type VoiceContact,
 } from './contact'
 import {
@@ -36,7 +38,12 @@ import {
   voiceAgentSystemPrompt,
 } from './conversation'
 import { shopifyConfigured } from '../integrations/shopify'
-import { orderStatusForSession } from './orders'
+import {
+  findOrderNumber,
+  isOrderLookupRequest,
+  orderStatusForSession,
+  orderStatusReply,
+} from './orders'
 import {
   createVoiceVerification,
   verifyVoiceVerificationCode,
@@ -238,10 +245,28 @@ export class MorrowDeskAgent extends VoiceAgent<Env> {
       }
     }
 
+    const ordersAvailable = shopifyConfigured(this.env)
+    if (!contact && ordersAvailable && isOrderLookupRequest(transcript)) {
+      context.connection.setState({
+        ...state,
+        pendingContactReason: 'order_lookup',
+      } satisfies VoiceConnectionState)
+      context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply' }))
+      return 'To look up your order, add your name and the email used at checkout in the card below.'
+    }
+
+    const isOrderContinuation = transcript.trim() === ORDER_LOOKUP_CONTACT_CONTINUATION
+      || transcript.trim() === PRODUCT_HELP_CONTACT_CONTINUATION
+    if (contact && ordersAvailable && isOrderContinuation) {
+      const orderNumber = findOrderNumber(messages.filter((message) => message.content.trim() !== transcript.trim()))
+      if (!orderNumber) return 'What is the order number from your confirmation email?'
+      const result = await orderStatusForSession(this.env, { email: contact.email }, orderNumber)
+      return orderStatusReply(result)
+    }
+
     const directResponse = directVoiceResponse(transcript, messages)
     if (directResponse) return directResponse
 
-    const ordersAvailable = shopifyConfigured(this.env)
     const ordersEnabled = ordersAvailable && contact !== null
     let contactCardRequested = false
     const settings = await loadWorkspaceSettings(this.env.DB)
