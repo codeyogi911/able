@@ -141,7 +141,7 @@ export async function loadEmailCustomization(db: D1Database): Promise<EmailCusto
        ELSE 5 END`,
   ).all<EmailTemplateRow>()
   if (result.results.length !== EMAIL_NOTIFICATIONS.length) {
-    throw new Error('Morrow Desk email customization migration has not been applied')
+    throw new Error('Able Desk email customization migration has not been applied')
   }
   return {
     schemaVersion: 'email-customization.v1',

@@ -1,6 +1,6 @@
 # Deployment guide
 
-This guide provisions one single-tenant Morrow Desk deployment. Use a separate Cloudflare account or fresh preview resources for the first clean-clone release test.
+This guide provisions one single-tenant Able Desk deployment. Use a separate Cloudflare account or fresh preview resources for the first clean-clone release test.
 
 ## 1. Provision the application
 
@@ -17,7 +17,7 @@ The committed Wrangler configuration omits database IDs, bucket names, hostnames
 
 At this point the Worker is provisioned, but the support desk is intentionally not operational.
 
-The browser support assistant is published as the public homepage at `/` when `MORROW_VOICE_DEMO_ENABLED` is `1`; `/voice` and `/demo/voice` redirect there. It requires the production Email Service, Turnstile, rate-limit, D1, R2, Workers AI, and `CUSTOMER_CAPABILITY_SECRET` bindings. A session-level Turnstile proof enables anonymous text or voice help. The assistant collects a rate-limited name and email in-thread only before an identity-bearing order, ticket, or human-review action. Those details are unverified contact information used to name tickets, scope order lookup, and deliver follow-up. If the assistant is disabled or its required production setup is incomplete, `/` fails safely back to the conventional portal.
+The browser support assistant is published as the public homepage at `/` when `ABLE_VOICE_DEMO_ENABLED` is `1`; `/voice` and `/demo/voice` redirect there. It requires the production Email Service, Turnstile, rate-limit, D1, R2, Workers AI, and `CUSTOMER_CAPABILITY_SECRET` bindings. A session-level Turnstile proof enables anonymous text or voice help. The assistant collects a rate-limited name and email in-thread only before an identity-bearing order, ticket, or human-review action. Those details are unverified contact information used to name tickets, scope order lookup, and deliver follow-up. If the assistant is disabled or its required production setup is incomplete, `/` fails safely back to the conventional portal.
 
 For an already-provisioned production Worker, use `npm run deploy:production`. It refuses a non-`main` Cloudflare Builds branch, applies pending additive D1 migrations, rebuilds the embedded MCP App, and then deploys the Worker.
 
@@ -38,10 +38,10 @@ Cloudflare stores this Git trigger outside `wrangler.jsonc`; the committed produ
 
 Keep deployment-specific resource coordinates in private Workers Builds variables rather than the reusable Wrangler source:
 
-- `MORROW_D1_DATABASE_ID`: the production D1 database UUID;
-- `MORROW_D1_DATABASE_NAME`: the production D1 database name;
-- `MORROW_R2_BUCKET_NAME`: the production attachment bucket;
-- `MORROW_MEDIA_QUEUE_NAME`: the production attachment-analysis queue.
+- `ABLE_D1_DATABASE_ID`: the production D1 database UUID;
+- `ABLE_D1_DATABASE_NAME`: the production D1 database name;
+- `ABLE_R2_BUCKET_NAME`: the production attachment bucket;
+- `ABLE_MEDIA_QUEUE_NAME`: the production attachment-analysis queue.
 
 `npm run deploy:production` validates these values and creates an ignored, ephemeral Wrangler file for the build. It never writes the production coordinates into the public repository.
 
@@ -52,10 +52,10 @@ Bind two distinct custom domains to the same Worker: one public portal hostname 
 Set secrets without placing values in shell history when possible:
 
 ```sh
-npx wrangler secret put MORROW_OPERATOR_HOSTNAME
+npx wrangler secret put ABLE_OPERATOR_HOSTNAME
 npx wrangler secret put CF_ACCESS_AUD
 npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
-npx wrangler secret put MORROW_OWNER_EMAIL
+npx wrangler secret put ABLE_OWNER_EMAIL
 npx wrangler secret put TURNSTILE_SECRET_KEY
 npx wrangler secret put TURNSTILE_SITE_KEY
 npx wrangler secret put CUSTOMER_CAPABILITY_SECRET
@@ -66,7 +66,7 @@ npx wrangler secret put WHATSAPP_PHONE_NUMBER_ID
 npx wrangler secret put WHATSAPP_WABA_ID
 ```
 
-`MORROW_OPERATOR_HOSTNAME` is a bare hostname with no scheme, port, path, or wildcard. The first verified identity matching `MORROW_OWNER_EMAIL` becomes an administrator. Other Access-approved identities are provisioned as agents and can later be promoted by an administrator. In production, `/mcp` and `/ops` return a configuration error until the operator hostname is valid, and are unavailable on every other hostname. Portal routes return 404 on the operator hostname. Localhost keeps the direct development workflow.
+`ABLE_OPERATOR_HOSTNAME` is a bare hostname with no scheme, port, path, or wildcard. The first verified identity matching `ABLE_OWNER_EMAIL` becomes an administrator. Other Access-approved identities are provisioned as agents and can later be promoted by an administrator. In production, `/mcp` and `/ops` return a configuration error until the operator hostname is valid, and are unavailable on every other hostname. Portal routes return 404 on the operator hostname. Localhost keeps the direct development workflow.
 
 The committed observability configuration disables automatic invocation logs. Keep it disabled unless your private logging policy explicitly redacts request headers and cookies; customer sessions carry a bearer capability in a secure transport cookie.
 
@@ -81,9 +81,9 @@ Bind the public portal hostname and dedicated operator hostname to the same Work
 - case prefix, locale, and timezone;
 - one accent, neutral canvas, ink, and the fixed font family.
 
-An administrator can inspect or patch the same brand subset through `morrow_portal_customize`. The tool and `/ops/settings` share validation and immutable audit evidence. V1 does not accept custom CSS, remote font code, or scripts; this keeps agent-authored portal changes inside contrast-checked, URL-validated guardrails.
+An administrator can inspect or patch the same brand subset through `able_portal_customize`. The tool and `/ops/settings` share validation and immutable audit evidence. V1 does not accept custom CSS, remote font code, or scripts; this keeps agent-authored portal changes inside contrast-checked, URL-validated guardrails.
 
-The admin-only `morrow_email_customize` tool controls the four customer notification types: case received, customer update received, agent reply, and case recovery. Each has its own enable switch, subject, plain-text fallback, and sanitized rich Markdown body. Call the tool with no arguments to inspect the supported placeholders before changing a template.
+The admin-only `able_email_customize` tool controls the four customer notification types: case received, customer update received, agent reply, and case recovery. Each has its own enable switch, subject, plain-text fallback, and sanitized rich Markdown body. Call the tool with no arguments to inspect the supported placeholders before changing a template.
 
 Do not add customer domains or resource IDs to `wrangler.jsonc`.
 
@@ -111,14 +111,14 @@ Do not expose a new number to customers yet if you need media ingestion, templat
 
 - Access denies an unapproved browser and permits an approved operator across the full operator hostname.
 - Public portal routes return 404 on the operator hostname, while `/mcp` and `/ops` return 404 on the public hostname.
-- MCP completes `morrow_case_next` then `morrow_case_reply` with an exact revision.
-- A photo attachment reaches `ready`, `morrow_attachment_inspect` returns bounded evidence, and `detail: "visual"` supplies a normalized WebP preview rather than the original.
+- MCP completes `able_case_next` then `able_case_reply` with an exact revision.
+- A photo attachment reaches `ready`, `able_attachment_inspect` returns bounded evidence, and `detail: "visual"` supplies a normalized WebP preview rather than the original.
 - A test request emails a usable private link.
 - The private link can view and reply but cannot read another case's attachment.
 - `/ops` shows outbox failure and indeterminate states truthfully.
 - A signed WhatsApp text creates one unclassified conversation and no case or lead; replaying the same Meta message ID creates nothing new.
 - MCP can route that conversation to one Desk case, one CRM sales lead, or both without collapsing the work items.
-- `morrow_conversation_reply` inside the customer-service window reaches the verified recipient and retains the returned Meta message ID.
+- `able_conversation_reply` inside the customer-service window reaches the verified recipient and retains the returned Meta message ID.
 - An agent reply outside the customer-service window is blocked before Meta is called.
 - A 360 px browser has no horizontal overflow and all form controls remain usable.
 
@@ -129,7 +129,7 @@ Deployment buttons may automate step 1 and request secrets. They cannot safely a
 The repository scanner rejects personal email addresses, concrete Wrangler resource identifiers, secret-bearing files, and common private-key material without carrying any customer's identity in source. Before publication, add every private brand, domain, sender, and legacy product name to a protected CI variable with one value per line, then run:
 
 ```sh
-MORROW_PRIVATE_DENYLIST="$PRIVATE_RELEASE_DENYLIST" npm run scan:public
+ABLE_PRIVATE_DENYLIST="$PRIVATE_RELEASE_DENYLIST" npm run scan:public
 ```
 
 Keep the denylist in private release configuration. Do not commit it, encode it into a test fixture, or print it in CI logs.

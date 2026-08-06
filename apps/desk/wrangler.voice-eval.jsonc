@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "morrow-voice-eval-local",
+  "name": "able-voice-eval-local",
   "main": "scripts/voice-eval-worker.ts",
   "workers_dev": false,
   "preview_urls": false,

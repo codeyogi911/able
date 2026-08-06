@@ -20,8 +20,8 @@ export async function claimVoiceTicketCapacity(
   now = Date.now(),
 ): Promise<VoiceTicketCapacity> {
   const [subjectHash, requestHash] = await Promise.all([
-    sha256(`morrow.voice-ticket.subject.v1\0${email.trim().toLowerCase()}`),
-    sha256(`morrow.voice-ticket.request.v1\0${requestId}`),
+    sha256(`able.voice-ticket.subject.v1\0${email.trim().toLowerCase()}`),
+    sha256(`able.voice-ticket.request.v1\0${requestId}`),
   ])
   const id = `voice_ticket_${crypto.randomUUID()}`
   const cutoff = now - TICKET_WINDOW_MS

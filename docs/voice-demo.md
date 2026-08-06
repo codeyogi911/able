@@ -1,6 +1,6 @@
 # Browser support assistant
 
-Morrow Desk publishes one Cloudflare-native browser support conversation as the public homepage at `/`, with text by default and optional voice input. `/voice` and `/demo/voice` redirect to that canonical route. It is not a telephone-network call and cannot place a live human into the audio session.
+Able Desk publishes one Cloudflare-native browser support conversation as the public homepage at `/`, with text by default and optional voice input. `/voice` and `/demo/voice` redirect to that canonical route. It is not a telephone-network call and cannot place a live human into the audio session.
 
 ## User flow
 
@@ -49,7 +49,7 @@ npx wrangler login
 npm run dev
 ```
 
-Open `http://localhost:8787/`. The legacy `/voice` and `/demo/voice` routes permanently redirect there. The production flag is committed on; set `MORROW_VOICE_DEMO_ENABLED:0` as a kill switch when the channel must be withdrawn, which restores the conventional portal home.
+Open `http://localhost:8787/`. The legacy `/voice` and `/demo/voice` routes permanently redirect there. The production flag is committed on; set `ABLE_VOICE_DEMO_ENABLED:0` as a kill switch when the channel must be withdrawn, which restores the conventional portal home.
 
 ## Conversation guardrails and evals
 
@@ -70,10 +70,10 @@ The session is protected by Turnstile (action `voice_session`) and the public ra
 
 Shopify order read-back is optional and fails closed. It activates only when `SHOPIFY_SHOP_DOMAIN` plus working credentials are configured. The current auth is the OAuth **client credentials grant**: create an app for your own organization in the Shopify Dev Dashboard with only the `read_orders` scope, request Protected customer data access (Level 2, Email field), install it on the store, and store its credentials as secrets (`wrangler secret put SHOPIFY_CLIENT_ID` and `wrangler secret put SHOPIFY_CLIENT_SECRET`). The Worker exchanges them at `https://{shop}/admin/oauth/access_token` (`grant_type=client_credentials`), caches the ~24-hour access token in memory with a five-minute safety margin, refreshes it on expiry, and re-authenticates once on a rejected token. A legacy custom-app Admin token (`wrangler secret put SHOPIFY_ADMIN_TOKEN`) is still honored and skips the token endpoint. Lookups use a pinned Admin GraphQL API version, 10-second timeouts on both the token call and the query, and degrade to a typed "unavailable" result — provider errors never reach the model or the caller.
 
-A created ticket proves only that Morrow Desk accepted the support request. It does not prove operator pickup or final resolution. Add a telephony provider and an explicit availability, queue, timeout, receipt, and fallback state machine before claiming phone calls or live transfers.
+A created ticket proves only that Able Desk accepted the support request. It does not prove operator pickup or final resolution. Add a telephony provider and an explicit availability, queue, timeout, receipt, and fallback state machine before claiming phone calls or live transfers.
 
 ## Package policy
 
-`@cloudflare/voice` is experimental and its upstream documentation warns that APIs can break between releases. Morrow Desk pins `@cloudflare/voice`, `agents`, AI SDK 6, and `workers-ai-provider` to tested compatible versions. Review upstream release notes and rerun the full repository gate before changing any of them.
+`@cloudflare/voice` is experimental and its upstream documentation warns that APIs can break between releases. Able Desk pins `@cloudflare/voice`, `agents`, AI SDK 6, and `workers-ai-provider` to tested compatible versions. Review upstream release notes and rerun the full repository gate before changing any of them.
 
 Treat end-to-end latency as a measured release property. Capture model, speech, tool, network, and rendering timings without retaining customer content; optimize only against reproducible traces.

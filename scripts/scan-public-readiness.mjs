@@ -10,7 +10,7 @@ const forbiddenNames = [/\.sqlite(?:3)?$/i, /\.db$/i, /\.zip$/i, /\.pem$/i, /\.p
 // Deployment-specific identities do not belong in this public repository,
 // even as an encoded denylist. Private release automation can inject one
 // token per line without teaching the source tree those values.
-const customerTokens = (process.env.MORROW_PRIVATE_DENYLIST ?? '')
+const customerTokens = (process.env.ABLE_PRIVATE_DENYLIST ?? '')
   .split(/\r?\n/)
   .map((value) => value.trim())
   .filter(Boolean)

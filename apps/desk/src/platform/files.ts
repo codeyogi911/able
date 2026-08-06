@@ -39,7 +39,7 @@ export async function storePortalFiles(
 ): Promise<PortalUploadBatch> {
   const stored: StagedAttachment[] = []
   const createdStorageKeys: string[] = []
-  const requestDigest = await sha256(new TextEncoder().encode(`morrow:portal-upload:v1:${requestId}`))
+  const requestDigest = await sha256(new TextEncoder().encode(`able:portal-upload:v1:${requestId}`))
   try {
     for (const [index, file] of files.entries()) {
       const content = new Uint8Array(await file.arrayBuffer())

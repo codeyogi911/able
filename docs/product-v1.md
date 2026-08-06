@@ -1,6 +1,6 @@
-# Morrow Desk V1 product contract
+# Able Desk V1 product contract
 
-This document is the implementation contract for the first public-ready Morrow Desk release. Morrow Desk is a single-tenant Desk + CRM foundation per Worker deployment. Operators work primarily through MCP, customers use the public portal, email, and a bounded WhatsApp text pilot, and administrators retain a small Cloudflare Access-protected recovery console.
+This document is the implementation contract for the first public-ready Able Desk release. Able Desk is a single-tenant Desk + CRM foundation per Worker deployment. Operators work primarily through MCP, customers use the public portal, email, and a bounded WhatsApp text pilot, and administrators retain a small Cloudflare Access-protected recovery console.
 
 ## Product boundary
 
@@ -10,57 +10,57 @@ V1 excludes customer passwords, community features, live human chat, telephone-n
 
 ## Required interfaces
 
-The normal Desk path is exactly two calls: `morrow_case_next`, then `morrow_case_reply`. New external conversations begin with `morrow_inbox_next` or `morrow_inbox_list`, followed by `morrow_conversation_get` when deeper history is needed, an explicit route or clear decision, and any reply on the Conversation. The MCP surface is:
+The normal Desk path is exactly two calls: `able_case_next`, then `able_case_reply`. New external conversations begin with `able_inbox_next` or `able_inbox_list`, followed by `able_conversation_get` when deeper history is needed, an explicit route or clear decision, and any reply on the Conversation. The MCP surface is:
 
-- `morrow_case_next`
-- `morrow_case_get`
-- `morrow_attachment_inspect`
-- `morrow_case_list`
-- `morrow_case_search`
-- `morrow_knowledge_search`
-- `morrow_case_create`
-- `morrow_case_reply`
-- `morrow_case_add_note`
-- `morrow_case_update`
-- `morrow_inbox_next`
-- `morrow_inbox_list`
-- `morrow_conversation_get`
-- `morrow_conversation_route`
-- `morrow_conversation_classify`
-- `morrow_conversation_reopen`
-- `morrow_conversation_reply`
-- `morrow_crm_lead_next`
-- `morrow_crm_lead`
-- `morrow_customer_workspace`
-- `morrow_party_adopt`
-- `morrow_crm_relationship`
-- `morrow_crm_activity`
-- `morrow_crm_followup`
-- `morrow_operation`
-- `morrow_operation_track`
-- `morrow_operation_observe`
-- `morrow_operation_expire`
-- admin-only `morrow_improvement`
-- admin-only `morrow_improvement_propose`
-- admin-only `morrow_improvement_evaluate`
-- admin-only `morrow_article_put`
-- admin-only `morrow_portal_customize`
-- admin-only `morrow_email_customize`
-- admin-only `morrow_diagnostics`
-- resources `morrow://attachments/{id}`, `morrow://attachments/{id}/preview`, and `morrow://articles/{slug}`
-- MCP App resource `ui://morrow/workspace.html`
+- `able_case_next`
+- `able_case_get`
+- `able_attachment_inspect`
+- `able_case_list`
+- `able_case_search`
+- `able_knowledge_search`
+- `able_case_create`
+- `able_case_reply`
+- `able_case_add_note`
+- `able_case_update`
+- `able_inbox_next`
+- `able_inbox_list`
+- `able_conversation_get`
+- `able_conversation_route`
+- `able_conversation_classify`
+- `able_conversation_reopen`
+- `able_conversation_reply`
+- `able_crm_lead_next`
+- `able_crm_lead`
+- `able_customer_workspace`
+- `able_party_adopt`
+- `able_crm_relationship`
+- `able_crm_activity`
+- `able_crm_followup`
+- `able_operation`
+- `able_operation_track`
+- `able_operation_observe`
+- `able_operation_expire`
+- admin-only `able_improvement`
+- admin-only `able_improvement_propose`
+- admin-only `able_improvement_evaluate`
+- admin-only `able_article_put`
+- admin-only `able_portal_customize`
+- admin-only `able_email_customize`
+- admin-only `able_diagnostics`
+- resources `able://attachments/{id}`, `able://attachments/{id}/preview`, and `able://articles/{slug}`
+- MCP App resource `ui://able/workspace.html`
 
-`morrow_case_next` returns case state and opaque revision, customer identity, public and internal messages, assignment, attachments, delivery warnings, and up to three relevant knowledge suggestions.
+`able_case_next` returns case state and opaque revision, customer identity, public and internal messages, assignment, attachments, delivery warnings, and up to three relevant knowledge suggestions.
 
-`morrow_attachment_inspect` is a read-only, task-shaped evidence tool. It defaults to a bounded summary and progressively discloses extracted evidence or one verified image only when requested. Immutable originals stay private in R2. Type detection comes from file signatures, image and PDF descriptions are processed outside MCP request latency and cached by source hash and processor version, and all customer-derived content is marked as untrusted evidence rather than instructions.
+`able_attachment_inspect` is a read-only, task-shaped evidence tool. It defaults to a bounded summary and progressively discloses extracted evidence or one verified image only when requested. Immutable originals stay private in R2. Type detection comes from file signatures, image and PDF descriptions are processed outside MCP request latency and cached by source hash and processor version, and all customer-derived content is marked as untrusted evidence rather than instructions.
 
-`morrow_customer_workspace` composes Helpdesk, Directory, and CRM through their public interfaces. It returns module revisions, explicit unknowns, evidence coordinates, and permitted next actions. Identity remains unresolved until `morrow_party_adopt` explicitly links the Helpdesk customer snapshot to a canonical Directory party.
+`able_customer_workspace` composes Helpdesk, Directory, and CRM through their public interfaces. It returns module revisions, explicit unknowns, evidence coordinates, and permitted next actions. Identity remains unresolved until `able_party_adopt` explicitly links the Helpdesk customer snapshot to a canonical Directory party.
 
-An operation receipt proves that a command committed. `morrow_operation_track` declares a separate outcome contract, `morrow_operation_observe` retains sourced observations, and `morrow_operation_expire` marks an elapsed pending window as not observable from server time. Non-authoritative or out-of-window evidence cannot close the operation. Improvement proposals remain inactive after passing evaluation; V1 exposes no activation tool or active proposal status.
+An operation receipt proves that a command committed. `able_operation_track` declares a separate outcome contract, `able_operation_observe` retains sourced observations, and `able_operation_expire` marks an elapsed pending window as not observable from server time. Non-authoritative or out-of-window evidence cannot close the operation. Improvement proposals remain inactive after passing evaluation; V1 exposes no activation tool or active proposal status.
 
 Every successful tool result exposes the same secret-filtered payload as both structured content for MCP Apps and a JSON text fallback. The App is presentation-only: case mutations remain model-mediated tool calls that must use the latest opaque revision.
 
-The public support homepage is an agent conversation that grounds ordinary questions in published knowledge and requests identity only when an order or durable follow-up needs it. Conventional topic browsing, article search, and articles remain at `/kb`; request intake with suggested articles, private attachments, capability-based case threads and replies, and non-enumerating lost-link recovery remain secondary routes. `morrow_portal_customize` and `/ops/settings` share the same audited, contrast-checked brand settings for display name, portal title, brand icon or logo, favicon, home link, colors, and one of four guarded font families. `morrow_email_customize` controls enabled state, subject, plain-text fallback, and sanitized Markdown for case received, update received, agent reply, and case recovery notifications. Arbitrary CSS, raw email HTML, remote font code, and scripts are outside V1. `/ops` is a recovery and configuration surface, not a second full agent desk.
+The public support homepage is an agent conversation that grounds ordinary questions in published knowledge and requests identity only when an order or durable follow-up needs it. Conventional topic browsing, article search, and articles remain at `/kb`; request intake with suggested articles, private attachments, capability-based case threads and replies, and non-enumerating lost-link recovery remain secondary routes. `able_portal_customize` and `/ops/settings` share the same audited, contrast-checked brand settings for display name, portal title, brand icon or logo, favicon, home link, colors, and one of four guarded font families. `able_email_customize` controls enabled state, subject, plain-text fallback, and sanitized Markdown for case received, update received, agent reply, and case recovery notifications. Arbitrary CSS, raw email HTML, remote font code, and scripts are outside V1. `/ops` is a recovery and configuration surface, not a second full agent desk.
 
 ## Domain invariants
 
@@ -87,11 +87,11 @@ Deep `Communications`, `Helpdesk`, `Directory`, and `CRM` modules own their busi
 
 The Worker binds static assets, one D1 database, one private R2 bucket, Email Service, a public rate limiter, and a retry cron. The same Worker is exposed on distinct public and operator hostnames. One domain-wide Access application protects the operator hostname carrying `/mcp` and `/ops`; host routing and operator authentication fail closed until the operator hostname, Access issuer, and audience are valid. No production domains, senders, resource identifiers, or Access metadata belong in the repository.
 
-Morrow Desk is an agent-first business suite foundation. Identity, context envelopes, durable operation state, audit, receipts, files, delivery, provenance, and controlled improvement records are shared substrate. Future inventory, purchasing, order, and accounting capabilities remain deep modules with small interfaces; they do not reach into Helpdesk or CRM private tables. See [ADR 0001](adr/0001-agent-first-suite.md) and [ADR 0002](adr/0002-agent-first-desk-crm-foundation.md).
+Able Desk is an agent-first business suite foundation. Identity, context envelopes, durable operation state, audit, receipts, files, delivery, provenance, and controlled improvement records are shared substrate. Future inventory, purchasing, order, and accounting capabilities remain deep modules with small interfaces; they do not reach into Helpdesk or CRM private tables. See [ADR 0001](adr/0001-agent-first-suite.md) and [ADR 0002](adr/0002-agent-first-desk-crm-foundation.md).
 
 ## Schema and deployment evolution
 
-Committed D1 migrations evolve Morrow's own schema and must remain additive or carry an explicit compatibility plan. Importing history from another desk is not part of the public V1. A future import adapter must use documented source contracts, restartable evidence, deterministic identity rules, and reconciliation before it can enter the product boundary.
+Committed D1 migrations evolve Able's own schema and must remain additive or carry an explicit compatibility plan. Importing history from another desk is not part of the public V1. A future import adapter must use documented source contracts, restartable evidence, deterministic identity rules, and reconciliation before it can enter the product boundary.
 
 Hosted proving grounds deploy exact public commits through protected environments. Their private configuration and operational cutover procedures are not product source; see [development.md](development.md).
 

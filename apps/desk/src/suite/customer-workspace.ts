@@ -1,11 +1,11 @@
 import type { Crm, CrmWorkspace } from '../crm'
 import type { Directory, DirectoryReceipt, PartyWorkspace } from '../directory'
 import type { Actor, CaseWorkspace, Helpdesk } from '../domain/types'
-import { MORROW_ONTOLOGY_VERSION } from '../ontology/v1'
+import { ABLE_ONTOLOGY_VERSION } from '../ontology/v1'
 
 export type CustomerWorkspace = {
   schemaVersion: 'customer-workspace.v1'
-  ontologyVersion: typeof MORROW_ONTOLOGY_VERSION
+  ontologyVersion: typeof ABLE_ONTOLOGY_VERSION
   kind: 'customer_workspace'
   asOf: string
   subject: {
@@ -138,7 +138,7 @@ class ComposedCustomerWorkspace implements CustomerWorkspaceService {
     if (!party) {
       return {
         schemaVersion: 'customer-workspace.v1',
-        ontologyVersion: MORROW_ONTOLOGY_VERSION,
+        ontologyVersion: ABLE_ONTOLOGY_VERSION,
         kind: 'customer_workspace',
         asOf: this.now().toISOString(),
         subject: { caseRef: desk.ref, helpdeskCustomerId: desk.customer.id, partyId: null },
@@ -154,7 +154,7 @@ class ComposedCustomerWorkspace implements CustomerWorkspaceService {
     const crm = await this.crm.work(actor, { kind: 'party', partyId: party.id })
     return {
       schemaVersion: 'customer-workspace.v1',
-      ontologyVersion: MORROW_ONTOLOGY_VERSION,
+      ontologyVersion: ABLE_ONTOLOGY_VERSION,
       kind: 'customer_workspace',
       asOf: this.now().toISOString(),
       subject: { caseRef: desk.ref, helpdeskCustomerId: desk.customer.id, partyId: party.id },

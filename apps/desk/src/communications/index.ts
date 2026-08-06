@@ -138,7 +138,7 @@ function replyCapability(row: Pick<ConversationRow, 'channel' | 'provider'>): Co
     return {
       available: true,
       reason: null,
-      nextAction: 'Use morrow_conversation_reply with the latest revision. Delivery remains subject to the WhatsApp customer-service window.',
+      nextAction: 'Use able_conversation_reply with the latest revision. Delivery remains subject to the WhatsApp customer-service window.',
     }
   }
   return {
@@ -209,7 +209,7 @@ function decodeInboxCursor(value: string | undefined): InboxCursor | null {
       id: cleanText(parsed.id, 'Inbox cursor conversation ID', 240),
     }
   } catch {
-    throw new Error('Inbox cursor is invalid; restart with morrow_inbox_list without a cursor')
+    throw new Error('Inbox cursor is invalid; restart with able_inbox_list without a cursor')
   }
 }
 
@@ -279,7 +279,7 @@ class D1Communications implements Communications {
         hasMore,
         nextCursor: hasMore && last ? encodeInboxCursor({ lastInboundAt: last.last_inbound_at, id: last.id }) : null,
         nextAction: hasMore
-          ? 'Pass nextCursor to morrow_inbox_list to load the next compact inbox page.'
+          ? 'Pass nextCursor to able_inbox_list to load the next compact inbox page.'
           : null,
       }
     }
@@ -635,7 +635,7 @@ class D1Communications implements Communications {
     const current = await this.load(command.conversationId)
     if (!current) throw new Error('Conversation not found')
     if (current.revision !== command.revision) throw new Error('The conversation changed; load the latest revision and try again')
-    if (current.resolution) throw new Error('Use morrow_conversation_reopen before routing a final no-work classification')
+    if (current.resolution) throw new Error('Use able_conversation_reopen before routing a final no-work classification')
     if (current.routes.some((route) => route.target === command.link.target)) {
       throw new Error(`Conversation is already routed to ${command.link.target}`)
     }
@@ -899,7 +899,7 @@ class D1Communications implements Communications {
       .bind(command.conversationId).first<ConversationRow>()
     if (!row) throw new Error('Conversation not found')
     if (row.revision !== command.revision) throw new Error('The conversation changed; load the latest revision and try again')
-    if (row.final_disposition) throw new Error('Use morrow_conversation_reopen before replying to a final no-work classification')
+    if (row.final_disposition) throw new Error('Use able_conversation_reopen before replying to a final no-work classification')
     const capability = replyCapability(row)
     if (!capability.available) throw new Error(capability.reason!)
     const now = this.now().toISOString()

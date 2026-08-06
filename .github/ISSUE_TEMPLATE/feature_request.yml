@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Read docs/roadmap.md and ADR 0001 first — Morrow Desk deliberately builds deep modules behind small agent interfaces and declines speculative plug-in frameworks. Proposals that fit the architecture land much faster.
+        Read docs/roadmap.md and ADR 0001 first — Able Desk deliberately builds deep modules behind small agent interfaces and declines speculative plug-in frameworks. Proposals that fit the architecture land much faster.
   - type: textarea
     id: problem
     attributes:

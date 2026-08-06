@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { HUMAN_HELP_MESSAGE } from '../src/voice/escalation'
 import { ORDER_LOOKUP_CONTACT_CONTINUATION } from '../src/voice/contact'
 
-type TestAgentEnv = typeof env & { MorrowDeskAgent: DurableObjectNamespace }
+type TestAgentEnv = typeof env & { AbleDeskAgent: DurableObjectNamespace }
 
 function nextMessage(socket: WebSocket, predicate: (value: Record<string, unknown>) => boolean): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
@@ -22,9 +22,9 @@ function nextMessage(socket: WebSocket, predicate: (value: Record<string, unknow
 }
 
 async function connectAgent(name: string, origin = 'http://localhost'): Promise<WebSocket> {
-  const namespace = (env as TestAgentEnv).MorrowDeskAgent
+  const namespace = (env as TestAgentEnv).AbleDeskAgent
   const stub = namespace.get(namespace.idFromName(name))
-  const response = await stub.fetch(new Request(`${origin}/agents/morrow-desk-agent/${name}`, {
+  const response = await stub.fetch(new Request(`${origin}/agents/able-desk-agent/${name}`, {
     headers: { upgrade: 'websocket' },
   }))
   expect(response.status).toBe(101)

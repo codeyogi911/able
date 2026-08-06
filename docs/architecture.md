@@ -2,7 +2,7 @@
 
 For the system at a glance, start with the [architecture overview](architecture-overview.md). This document defines the detailed boundaries behind that diagram.
 
-Morrow Desk is one Cloudflare Worker with Hono JSX server rendering, static assets, D1, a private R2 bucket, Email Service, a rate-limit binding, and a retry cron. The V1 product has no browser SPA or live-chat state. Verified browser voice support adds one Agents SDK Durable Object: Turnstile and a short-lived email OTP bind a customer identity to one WebSocket connection, then narrow bridge methods can open Helpdesk cases or read status only for that verified email. The model never supplies the customer identity. Portal branding is deployment data behind one shared validator: `/ops/settings` and the admin-only MCP customization tool write the same bounded identity, asset URL, color, and font fields and emit the same audit event. Customer email templates are separate audited deployment data: the admin MCP tool validates known brace placeholders, stores plain-text and Markdown variants, and sanitizes rich HTML before it enters the durable outbox.
+Able Desk is one Cloudflare Worker with Hono JSX server rendering, static assets, D1, a private R2 bucket, Email Service, a rate-limit binding, and a retry cron. The V1 product has no browser SPA or live-chat state. Verified browser voice support adds one Agents SDK Durable Object: Turnstile and a short-lived email OTP bind a customer identity to one WebSocket connection, then narrow bridge methods can open Helpdesk cases or read status only for that verified email. The model never supplies the customer identity. Portal branding is deployment data behind one shared validator: `/ops/settings` and the admin-only MCP customization tool write the same bounded identity, asset URL, color, and font fields and emit the same audit event. Customer email templates are separate audited deployment data: the admin MCP tool validates known brace placeholders, stores plain-text and Markdown variants, and sanitizes rich HTML before it enters the durable outbox.
 
 ## Deep modules
 
@@ -28,7 +28,7 @@ Directory and CRM follow the same rule:
 - CRM owns relationship status and owner, append-only activities, and revisioned follow-ups.
 - CRM verifies a party through the Directory interface; it never queries Directory tables.
 - `customer_workspace.v1` composes Helpdesk, Directory, and CRM results through their public interfaces and exposes each module revision plus unresolved facts.
-- Every composed envelope identifies the `morrow-business.v1` ontology documented in [the v1 ontology](ontology/morrow-business-v1.md).
+- Every composed envelope identifies the `able-business.v1` ontology documented in [the v1 ontology](ontology/able-business-v1.md).
 
 MCP exposes task-shaped adapters for these capabilities. It does not offer generic table, graph, object, or JSON mutation tools.
 

@@ -78,7 +78,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/
 const CAPABILITY_PATTERN = /^[A-Za-z0-9._~-]{16,512}$/
 const ATTACHMENT_ID_PATTERN = /^[A-Za-z0-9._~-]{1,160}$/
-const CUSTOMER_SESSION_COOKIE = '__Host-morrow_case'
+const CUSTOMER_SESSION_COOKIE = '__Host-able_case'
 const CUSTOMER_SESSION_MAX_AGE = 60 * 60 * 24 * 30
 
 const CAPABILITY_BOOTSTRAP_SCRIPT = `(() => {
@@ -92,7 +92,7 @@ const CAPABILITY_BOOTSTRAP_SCRIPT = `(() => {
   fetch('/requests/session', {
     method: 'POST',
     credentials: 'same-origin',
-    headers: { 'content-type': 'application/json', 'x-morrow-capability-exchange': '1' },
+    headers: { 'content-type': 'application/json', 'x-able-capability-exchange': '1' },
     body: JSON.stringify({ capability: token }),
   }).then((response) => {
     window.location.replace(response.ok ? '/requests/case' : '/requests/recover?reason=private-link');
@@ -231,7 +231,7 @@ function pageTitle(page: string, settings: WorkspaceSettingsView): string {
  * deployment named "Example Company Support" never renders "… Support Support".
  */
 function supportTitle(settings: WorkspaceSettingsView): string {
-  return workspaceSupportName(settings.displayName.trim() || 'Morrow Desk')
+  return workspaceSupportName(settings.displayName.trim() || 'Able Desk')
 }
 
 function Turnstile({ settings, action }: { settings: WorkspaceSettingsView; action: 'intake' | 'recover' | 'reply' }) {
@@ -793,7 +793,7 @@ export function createPortalRoutes(deps: PortalDependencies): Hono {
     const request = c.req.raw
     if (
       !exchangeRequestIsSameOrigin(request)
-      || request.headers.get('x-morrow-capability-exchange') !== '1'
+      || request.headers.get('x-able-capability-exchange') !== '1'
       || !request.headers.get('content-type')?.toLowerCase().startsWith('application/json')
     ) {
       return c.body(null, 400)
@@ -827,7 +827,7 @@ export function createPortalRoutes(deps: PortalDependencies): Hono {
     const attachmentId = c.req.param('attachmentId')
     if (!capabilityValid(token) || !ATTACHMENT_ID_PATTERN.test(attachmentId)) return c.notFound()
     try {
-      const resource = await deps.customerResource({ token }, `morrow://attachments/${attachmentId}`)
+      const resource = await deps.customerResource({ token }, `able://attachments/${attachmentId}`)
       return resourceResponse(c, resource)
     } catch {
       return c.notFound()

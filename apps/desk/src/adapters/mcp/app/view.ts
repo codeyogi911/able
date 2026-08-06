@@ -12,7 +12,7 @@ type UnknownRecord = Record<string, unknown>
 
 function appRoot(): HTMLElement {
   const element = document.querySelector<HTMLElement>('#app')
-  if (!element) throw new Error('Morrow Desk App root is missing')
+  if (!element) throw new Error('Able Desk App root is missing')
   return element
 }
 
@@ -375,7 +375,7 @@ function renderSalesLead(value: UnknownRecord): HTMLElement {
   append(
     control,
     el('span', 'agent-control-mark', 'AI'),
-    el('p', undefined, 'Ask your agent to qualify, follow up, reassign, or convert this lead. Morrow Desk will require the latest revision before changing business state.'),
+    el('p', undefined, 'Ask your agent to qualify, follow up, reassign, or convert this lead. Able Desk will require the latest revision before changing business state.'),
   )
   view.body.append(control)
   return view.frame
@@ -605,7 +605,7 @@ function renderReceipt(value: UnknownRecord): HTMLElement {
   append(
     copy,
     el('p', 'receipt-title', articleUpdated ? 'The article revision is ready' : caseValue ? `Case ${text(caseValue.ref, '')} is up to date` : 'The operation completed'),
-    el('p', 'receipt-copy', value.replayed === true ? 'Morrow Desk returned the original result without duplicating the action.' : delivery ? `Delivery state: ${titleCase(delivery)}.` : 'No outbound delivery was required.'),
+    el('p', 'receipt-copy', value.replayed === true ? 'Able Desk returned the original result without duplicating the action.' : delivery ? `Delivery state: ${titleCase(delivery)}.` : 'No outbound delivery was required.'),
   )
   append(receipt, copy, el('span', 'receipt-code', text(value.operationId, text(value.resourceRevision, 'Receipt recorded'))))
   view.body.append(receipt)
@@ -633,7 +633,7 @@ function displayValue(value: unknown): string {
 
 function renderRecord(value: UnknownRecord): HTMLElement {
   const entries = Object.entries(value).filter(([, entry]) => entry !== undefined)
-  const view = frame('Morrow Desk result', 'Operation details', [badge(`${entries.length} ${entries.length === 1 ? 'field' : 'fields'}`)])
+  const view = frame('Able Desk result', 'Operation details', [badge(`${entries.length} ${entries.length === 1 ? 'field' : 'fields'}`)])
   if (entries.length === 0) {
     view.body.append(emptyBlock('No details returned', 'The operation completed without a displayable payload.'))
     return view.frame
@@ -651,7 +651,7 @@ function renderRecord(value: UnknownRecord): HTMLElement {
 function renderResult(value: unknown, visualDataUrl: string | null = null): void {
   const result = record(value)
   if (!result) {
-    root.replaceChildren(emptyBlock('Nothing to display', 'Morrow Desk returned an empty result.'))
+    root.replaceChildren(emptyBlock('Nothing to display', 'Able Desk returned an empty result.'))
     return
   }
   let rendered: HTMLElement
@@ -688,7 +688,7 @@ function renderError(message: string): void {
   const panel = el('section', 'app-frame state-panel error-panel')
   panel.setAttribute('role', 'alert')
   const content = el('div', 'state-content')
-  append(content, el('span', 'state-mark', '!'), el('h1', undefined, 'Morrow Desk could not load this view'), el('p', 'error-copy', message))
+  append(content, el('span', 'state-mark', '!'), el('h1', undefined, 'Able Desk could not load this view'), el('p', 'error-copy', message))
   panel.append(content)
   root.replaceChildren(panel)
 }
@@ -736,13 +736,13 @@ function applyHostContext(context: McpUiHostContext | undefined): void {
 
 renderLoading()
 
-const app = new App({ name: 'Morrow Desk cards', version: '0.1.0' }, {})
+const app = new App({ name: 'Able Desk cards', version: '0.1.0' }, {})
 
 app.ontoolinput = () => renderLoading()
 app.ontoolcancelled = () => renderError('The operation was cancelled before a result was available.')
 app.ontoolresult = (result) => {
   if (result.isError) {
-    renderError(text(parseTextResult(result.content), 'Morrow Desk could not complete the operation.'))
+    renderError(text(parseTextResult(result.content), 'Able Desk could not complete the operation.'))
     return
   }
   const structured = result.structuredContent

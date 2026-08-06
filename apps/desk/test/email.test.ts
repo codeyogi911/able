@@ -9,7 +9,7 @@ import { updateWorkspaceSettings } from '../src/settings'
 import worker from '../src/worker'
 import { emailFixture, ForwardableEmailFixture } from './helpers/email-fixture'
 
-const LOCAL_CAPABILITY_SECRET = 'morrow-local-capability-secret-not-for-production'
+const LOCAL_CAPABILITY_SECRET = 'able-local-capability-secret-not-for-production'
 const workerBindings = env as unknown as Env
 
 type SentEmail = {
@@ -34,7 +34,7 @@ function runtimeEnv(
     MEDIA_QUEUE: workerBindings.MEDIA_QUEUE,
     ASSETS: workerBindings.ASSETS,
     PUBLIC_RATE_LIMIT: workerBindings.PUBLIC_RATE_LIMIT,
-    MORROW_DEV_EMAIL: 'owner@example.com',
+    ABLE_DEV_EMAIL: 'owner@example.com',
     TEST_MIGRATIONS: workerBindings.TEST_MIGRATIONS,
     ...(capabilitySecret ? { CUSTOMER_CAPABILITY_SECRET: capabilitySecret } : {}),
   } as Env
@@ -114,14 +114,14 @@ describe('inbound email channel', () => {
     }>()
 
     expect(row).toMatchObject({
-      ref: 'MD-1',
+      ref: 'AD-1',
       channel: 'email',
       status: 'open',
       body_text: 'The display turns off after about one minute.',
       scope: 'email',
       state: 'queued',
     })
-    expect(row?.outbox_body).toContain('{{morrow_customer_capability}}')
+    expect(row?.outbox_body).toContain('{{able_customer_capability}}')
     expect(await count('cases')).toBe(1)
     expect(await count('messages')).toBe(1)
     expect(await count('operation_receipts')).toBe(1)
@@ -129,7 +129,7 @@ describe('inbound email channel', () => {
   })
 
   it.each([
-    { name: 'Morrow Desk reference', marker: 'MD-1', legacy: false },
+    { name: 'Able Desk reference', marker: 'AD-1', legacy: false },
     { name: 'generic legacy alias', marker: 'LEG-902', legacy: true },
   ])('threads a reply by $name and deduplicates the Message-ID', async ({ marker, legacy }) => {
     await receive(emailFixture({
@@ -156,7 +156,7 @@ describe('inbound email channel', () => {
 
     const replyRaw = emailFixture({
       subject: `Re: [${marker}] Startup problem`,
-      messageId: `<thread-reply-${legacy ? 'legacy' : 'morrow'}@example.test>`,
+      messageId: `<thread-reply-${legacy ? 'legacy' : 'able'}@example.test>`,
       text: 'I tried the checklist and the case should reopen.',
     })
     const first = await receive(replyRaw)
@@ -234,7 +234,7 @@ describe('inbound email channel', () => {
       body: 'This reply must carry the canonical case marker.',
     })
     const emitted = await env.DB.prepare("SELECT subject FROM outbox_rows WHERE kind = 'public_reply'").first<{ subject: string }>()
-    expect(emitted?.subject).toMatch(/\[MD-1\]/)
+    expect(emitted?.subject).toMatch(/\[AD-1\]/)
 
     const customerReply = await receive(emailFixture({
       subject: emitted!.subject,
@@ -281,7 +281,7 @@ describe('inbound email channel', () => {
        JOIN stored_files ON stored_files.id = case_attachments.file_id`,
     ).first<{ ref: string; body_text: string; filename: string }>()
     expect(attachment).toEqual({
-      ref: 'MD-1',
+      ref: 'AD-1',
       body_text: 'This is the issue in the attached video.',
       filename: 'machine-steam.mp4',
     })
@@ -416,11 +416,11 @@ describe('durable outbound email', () => {
     expect(run).toEqual({ considered: 1, accepted: 1, failed: 0, blocked: 0, indeterminate: 0 })
     expect(send).toHaveBeenCalledTimes(1)
     const delivered = send.mock.calls[0]![0]
-    expect(delivered.headers['X-Morrow-Outbox-ID']).toBeTruthy()
-    expect(delivered.text).not.toContain('{{morrow_customer_capability}}')
-    expect(delivered.html).not.toContain('%7B%7Bmorrow_customer_capability%7D%7D')
+    expect(delivered.headers['X-Able-Outbox-ID']).toBeTruthy()
+    expect(delivered.text).not.toContain('{{able_customer_capability}}')
+    expect(delivered.html).not.toContain('%7B%7Bable_customer_capability%7D%7D')
     expect(delivered.html).not.toContain('%7B%7Bcase_ref%7D%7D')
-    expect(delivered.html).toContain('https://support.example.test/requests/recover?ref=MD-1')
+    expect(delivered.html).toContain('https://support.example.test/requests/recover?ref=AD-1')
     const link = /https:\/\/support\.example\.test\/requests\/access#([A-Za-z0-9_-]{32,})/.exec(delivered.text)
     expect(link).not.toBeNull()
     const capability = link![1]!
@@ -460,7 +460,7 @@ describe('durable outbound email', () => {
       headers: {
         'content-type': 'application/json',
         origin: 'https://support.example.test',
-        'x-morrow-capability-exchange': '1',
+        'x-able-capability-exchange': '1',
       },
       body: JSON.stringify({ capability }),
     })

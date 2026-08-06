@@ -108,7 +108,7 @@ export async function loadWorkspaceSettings(db: D1Database): Promise<WorkspaceSe
             setup_completed_at
      FROM workspace_settings WHERE id = 1`,
   ).first<SettingsRow>()
-  if (!row) throw new Error('Morrow Desk baseline migration has not been applied')
+  if (!row) throw new Error('Able Desk baseline migration has not been applied')
 
   let supportHours: Record<string, unknown> = {}
   try {

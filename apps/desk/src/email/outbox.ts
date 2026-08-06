@@ -394,7 +394,7 @@ export async function deliverOutbox(env: Env, limit = 25, dependencies: Delivery
         text: prepared.bodyText,
         html: prepared.bodyHtml,
         headers: {
-          'X-Morrow-Outbox-ID': row.id,
+          'X-Able-Outbox-ID': row.id,
           Organization: settings.displayName,
           'Auto-Submitted': 'auto-generated',
         },

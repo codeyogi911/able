@@ -14,7 +14,7 @@ test('operator navigation docks above the mobile safe area without covering cons
     <a class="skip-link" href="#ops-main">Skip to console</a>
     <div class="ops-shell">
       <aside class="ops-sidebar">
-        <a class="brand-link" href="/ops"><span class="brand-lockup"><span class="brand-mark">MO</span><span class="brand-name">Morrow Desk</span></span></a>
+        <a class="brand-link" href="/ops"><span class="brand-lockup"><span class="brand-mark">MO</span><span class="brand-name">Able Desk</span></span></a>
         <nav class="ops-nav" aria-label="Operator console">
           <a aria-current="page" href="/ops">Queue</a><a href="/ops/conversations">Inbox</a><a href="/ops/outbox">Outbox</a><a href="/ops/status">Status</a><a href="/ops/settings">Settings</a>
         </nav>

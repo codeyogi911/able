@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Morrow are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to Able are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
@@ -12,12 +12,12 @@ All notable changes to Morrow are documented in this file. The format follows [K
 
 ### Added
 
-- Initial public Morrow source tree with Morrow Desk as the first buildable workspace.
+- Initial public Able source tree with Able Desk as the first buildable workspace.
 - Agent-native Desk, Communications, Directory, CRM, Operations, and controlled-improvement modules behind task-shaped MCP tools.
 - Accessible support portal, knowledge search, browser assistant, email delivery, signed WhatsApp text ingress, private attachments, and a small recovery console.
 - Cloudflare Workers deployment configuration for D1, R2, Workers AI, Email Service, Access, Turnstile, queues, and Durable Objects.
 - Neutral test fixtures, visual regression coverage, public-readiness scanning, full-history scanning, CodeQL, and pinned secret scanning.
 - Apache-2.0 license, governance, security policy, contribution guide, architecture decisions, and public roadmap.
 
-[Unreleased]: https://github.com/codeyogi911/morrow/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/codeyogi911/morrow/releases/tag/v0.1.0
+[Unreleased]: https://github.com/codeyogi911/able/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/codeyogi911/able/releases/tag/v0.1.0

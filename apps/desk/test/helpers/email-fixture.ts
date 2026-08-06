@@ -37,7 +37,7 @@ export function emailFixture(input: EmailFixture): string {
     ])
   }
 
-  const boundary = 'morrow-test-boundary-7d15c8'
+  const boundary = 'able-test-boundary-7d15c8'
   return lines([
     ...headers,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,

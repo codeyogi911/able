@@ -5,13 +5,13 @@
 
 ## Context
 
-Traditional ERP deployments often make users assemble many products, duplicate identity and records, and bridge shallow interfaces with fragile integrations. Morrow Desk begins as a support desk, but its intended direction is a coherent agent-first operations suite.
+Traditional ERP deployments often make users assemble many products, duplicate identity and records, and bridge shallow interfaces with fragile integrations. Able Desk begins as a support desk, but its intended direction is a coherent agent-first operations suite.
 
 Building a generic ERP framework in V1 would recreate a different version of the same complexity. Support also has real invariants—private customer capabilities, case revisions, visibility, and email truth—that should not be diluted into generic CRUD.
 
 ## Decision
 
-Morrow Desk is the first complete vertical module. Future modules such as inventory, purchasing, orders, fulfillment, and accounting must each present a small, high-leverage agent interface and own their rules and persistence.
+Able Desk is the first complete vertical module. Future modules such as inventory, purchasing, orders, fulfillment, and accounting must each present a small, high-leverage agent interface and own their rules and persistence.
 
 The suite may share only infrastructure with proven cross-module semantics:
 

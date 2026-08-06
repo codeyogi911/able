@@ -86,7 +86,7 @@ function queueAge(openedAt: string): string {
 }
 
 function safeResourceUri(value: string): boolean {
-  return /^morrow:\/\/(attachments|articles)\/[A-Za-z0-9._~-]{1,180}$/.test(value)
+  return /^able:\/\/(attachments|articles)\/[A-Za-z0-9._~-]{1,180}$/.test(value)
 }
 
 function videoAttachmentUrl(resourceUri: string): string {
@@ -416,7 +416,7 @@ export function createOpsRoutes(deps: OpsDependencies): Hono {
 
   app.get('/video', async (c) => {
     const uri = c.req.query('uri') ?? ''
-    if (!safeResourceUri(uri) || !uri.startsWith('morrow://attachments/')) return c.notFound()
+    if (!safeResourceUri(uri) || !uri.startsWith('able://attachments/')) return c.notFound()
     try {
       const resource = await helpdesk.resource(actor, uri)
       if (!isVideoAttachment(resource.contentType)) return c.notFound()

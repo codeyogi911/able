@@ -6,8 +6,8 @@ const viewports = [
   { name: 'tablet-768', width: 768, height: 1024 },
   { name: 'desktop-1440', width: 1440, height: 1000 },
 ]
-const visualPort = Number.parseInt(process.env.MORROW_VISUAL_PORT ?? '8791', 10)
-if (!Number.isInteger(visualPort) || visualPort < 1024 || visualPort > 65535) throw new Error('MORROW_VISUAL_PORT must be an unprivileged TCP port')
+const visualPort = Number.parseInt(process.env.ABLE_VISUAL_PORT ?? '8791', 10)
+if (!Number.isInteger(visualPort) || visualPort < 1024 || visualPort > 65535) throw new Error('ABLE_VISUAL_PORT must be an unprivileged TCP port')
 const baseURL = `http://127.0.0.1:${visualPort}`
 
 export default defineConfig({

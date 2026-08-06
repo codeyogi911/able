@@ -9,10 +9,10 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const wrangler = process.platform === 'win32' ? 'wrangler.cmd' : 'wrangler'
 const config = path.join(root, 'wrangler.test.jsonc')
-const persistence = mkdtempSync(path.join(tmpdir(), 'morrow-visual-'))
+const persistence = mkdtempSync(path.join(tmpdir(), 'able-visual-'))
 const seed = path.join(root, 'test', 'visual', 'seed.sql')
-const port = Number.parseInt(process.env.MORROW_VISUAL_PORT ?? '8791', 10)
-if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('MORROW_VISUAL_PORT must be an unprivileged TCP port')
+const port = Number.parseInt(process.env.ABLE_VISUAL_PORT ?? '8791', 10)
+if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('ABLE_VISUAL_PORT must be an unprivileged TCP port')
 
 function run(arguments_, { inherit = true } = {}) {
   return new Promise((resolve, reject) => {
@@ -32,7 +32,7 @@ function run(arguments_, { inherit = true } = {}) {
 await run(['d1', 'migrations', 'apply', 'DB', '--local', '--persist-to', persistence, '--config', config])
 await run(['d1', 'execute', 'DB', '--local', '--persist-to', persistence, '--file', seed, '--config', config])
 
-const developmentEmail = process.env.MORROW_DEV_EMAIL ?? 'owner@example.com'
+const developmentEmail = process.env.ABLE_DEV_EMAIL ?? 'owner@example.com'
 const optionalBindings = [
   'SHOPIFY_SHOP_DOMAIN',
   'SHOPIFY_ADMIN_TOKEN',
@@ -44,8 +44,8 @@ const server = spawn(wrangler, [
   '--ip', '127.0.0.1',
   '--port', String(port),
   '--persist-to', persistence,
-  '--var', `MORROW_DEV_EMAIL:${developmentEmail}`,
-  '--var', 'MORROW_VOICE_DEMO_ENABLED:1',
+  '--var', `ABLE_DEV_EMAIL:${developmentEmail}`,
+  '--var', 'ABLE_VOICE_DEMO_ENABLED:1',
   ...optionalBindings,
   '--config', config,
 ], {

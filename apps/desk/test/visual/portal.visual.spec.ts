@@ -160,7 +160,7 @@ async function installVoiceSocketFixture(
   }
   const sendReady = () => send({ type: 'voice_session_ready' })
 
-  await page.routeWebSocket(/\/agents\/morrow-desk-agent\//, (route) => {
+  await page.routeWebSocket(/\/agents\/able-desk-agent\//, (route) => {
     socket = route
     route.onMessage((message) => {
       if (typeof message !== 'string') return
@@ -242,7 +242,7 @@ async function openCustomerSession(page: Page): Promise<void> {
     const response = await fetch('/requests/session', {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { 'content-type': 'application/json', 'x-morrow-capability-exchange': '1' },
+      headers: { 'content-type': 'application/json', 'x-able-capability-exchange': '1' },
       body: JSON.stringify({ capability }),
     })
     return response.status
@@ -259,7 +259,7 @@ test('support home opens with the agent as the primary help experience', async (
   await installVoiceSocketFixture(page)
   const response = await page.goto('/', { waitUntil: 'networkidle' })
   expect(response?.status()).toBe(200)
-  await expect(page).toHaveTitle(/Morrow Desk support assistant/)
+  await expect(page).toHaveTitle(/Able Desk support assistant/)
   await expect(page.getByRole('heading', { level: 1, name: 'How can we help?' })).toBeVisible()
   await expect(page.getByLabel('Ask anything')).toBeEnabled()
   await expect(page.getByRole('search')).toHaveCount(0)

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "morrow",
+  "name": "able",
   "main": "src/worker.tsx",
   "workers_dev": false,
   "preview_urls": false,
@@ -12,26 +12,26 @@
     "run_worker_first": ["/", "/healthz", "/mcp", "/ops", "/ops/*", "/webhooks/whatsapp", "/kb*", "/requests*", "/workspace-theme.css", "/portal/*", "/voice", "/demo/voice", "/agents/*"]
   },
   "vars": {
-    "MORROW_VOICE_DEMO_ENABLED": "1"
+    "ABLE_VOICE_DEMO_ENABLED": "1"
   },
   "durable_objects": {
     "bindings": [
       {
-        "name": "MorrowDeskAgent",
-        "class_name": "MorrowDeskAgent"
+        "name": "AbleDeskAgent",
+        "class_name": "AbleDeskAgent"
       }
     ]
   },
   "migrations": [
     {
       "tag": "v1_voice_demo",
-      "new_sqlite_classes": ["MorrowDeskAgent"]
+      "new_sqlite_classes": ["AbleDeskAgent"]
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "morrow",
+      "database_name": "able",
       "migrations_dir": "migrations"
     }
   ],
@@ -44,12 +44,12 @@
     "producers": [
       {
         "binding": "MEDIA_QUEUE",
-        "queue": "morrow-media"
+        "queue": "able-media"
       }
     ],
     "consumers": [
       {
-        "queue": "morrow-media",
+        "queue": "able-media",
         "max_batch_size": 10,
         "max_batch_timeout": 5,
         "max_retries": 3

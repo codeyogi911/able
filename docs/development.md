@@ -1,6 +1,6 @@
 # Development workflow
 
-Morrow's public repository is the canonical source for product work. A private hosted environment may prove real workflows, but it is a consumer of Morrow—not a separate product fork.
+Able's public repository is the canonical source for product work. A private hosted environment may prove real workflows, but it is a consumer of Able—not a separate product fork.
 
 ## Change flow
 
@@ -25,4 +25,4 @@ Fork pull requests never receive deployment secrets. Production or proving deplo
 
 ## Cutover from an earlier private codebase
 
-Keep the earlier repository read-only until a clean clone of Morrow installs, passes all gates, produces a dry-run deploy artifact, and successfully serves the required proving-ground smoke tests. Port any remaining generic work as reviewed commits with neutral fixtures. Archive the predecessor only after the new public upstream is the verified development source.
+Keep the earlier repository read-only until a clean clone of Able installs, passes all gates, produces a dry-run deploy artifact, and successfully serves the required proving-ground smoke tests. Port any remaining generic work as reviewed commits with neutral fixtures. Archive the predecessor only after the new public upstream is the verified development source.

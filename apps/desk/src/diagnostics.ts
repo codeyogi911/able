@@ -23,10 +23,10 @@ export async function getDiagnostics(env: Env): Promise<OperationalDiagnostics> 
   for (const row of deliveryRows.results) delivery[row.state] = row.value
 
   const blockers: string[] = []
-  if (!normalizeOperatorHostname(env.MORROW_OPERATOR_HOSTNAME)) blockers.push('Operator hostname is not configured')
+  if (!normalizeOperatorHostname(env.ABLE_OPERATOR_HOSTNAME)) blockers.push('Operator hostname is not configured')
   if (!env.CF_ACCESS_AUD) blockers.push('Cloudflare Access audience is not configured')
   if (!env.CF_ACCESS_TEAM_DOMAIN) blockers.push('Cloudflare Access issuer is not configured')
-  if (!env.MORROW_OWNER_EMAIL) blockers.push('Owner email is not configured')
+  if (!env.ABLE_OWNER_EMAIL) blockers.push('Owner email is not configured')
   if (!settings.portalBaseUrl) blockers.push('Portal base URL is not configured')
   if (!settings.supportEmail || !settings.outboundSender) blockers.push('Support and outbound sender addresses are incomplete')
   if (!settings.emailTestedAt) blockers.push('Outbound email has not passed the setup test')
@@ -39,9 +39,9 @@ export async function getDiagnostics(env: Env): Promise<OperationalDiagnostics> 
     healthy: blockers.length === 0 && delivery.indeterminate === 0,
     generatedAt: new Date().toISOString(),
     access: {
-      configured: Boolean(normalizeOperatorHostname(env.MORROW_OPERATOR_HOSTNAME) && env.CF_ACCESS_AUD && env.CF_ACCESS_TEAM_DOMAIN),
+      configured: Boolean(normalizeOperatorHostname(env.ABLE_OPERATOR_HOSTNAME) && env.CF_ACCESS_AUD && env.CF_ACCESS_TEAM_DOMAIN),
       issuerPinned: Boolean(env.CF_ACCESS_TEAM_DOMAIN),
-      ownerConfigured: Boolean(env.MORROW_OWNER_EMAIL),
+      ownerConfigured: Boolean(env.ABLE_OWNER_EMAIL),
     },
     setup: {
       completed: Boolean(settings.setupCompletedAt),

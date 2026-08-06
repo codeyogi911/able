@@ -11,8 +11,8 @@ export default defineConfig({
       wrangler: { configPath: './wrangler.test.jsonc' },
       miniflare: {
         bindings: {
-          MORROW_DEV_EMAIL: 'owner@example.com',
-          MORROW_OPERATOR_HOSTNAME: 'operators.example.test',
+          ABLE_DEV_EMAIL: 'owner@example.com',
+          ABLE_OPERATOR_HOSTNAME: 'operators.example.test',
           SHOPIFY_SHOP_DOMAIN: 'shop.example.test',
           SHOPIFY_ADMIN_TOKEN: 'local-test-token',
           VOICE_TEST_OTP_CODE: '123456',

@@ -202,7 +202,7 @@ export async function processPendingMediaIntelligence(
            (file_id, source_sha256, media_kind, detected_content_type, status,
             processor, processor_version, error_code, attempt_count)
          VALUES (?, ?, 'binary', 'application/octet-stream', 'failed',
-                 'morrow-original-inspection', '1', 'object_missing', 1)
+                 'able-original-inspection', '1', 'object_missing', 1)
          ON CONFLICT(file_id) DO UPDATE SET status = 'failed', error_code = 'object_missing',
            attempt_count = attempt_count + 1, updated_at = CURRENT_TIMESTAMP`,
       ).bind(file.id, file.sha256).run()
@@ -214,7 +214,7 @@ export async function processPendingMediaIntelligence(
     const bytes = new Uint8Array(await object.arrayBuffer())
     const detected = detectMedia(bytes, file.content_type)
     const usesAi = (detected.kind === 'image' || detected.kind === 'pdf') && analyzer
-    const processor = usesAi ? analyzer.processor : detected.kind === 'text' ? 'morrow-utf8-extractor' : 'morrow-original-inspection'
+    const processor = usesAi ? analyzer.processor : detected.kind === 'text' ? 'able-utf8-extractor' : 'able-original-inspection'
     const version = usesAi ? analyzer.version : '1'
     await db.prepare(
       `INSERT INTO file_intelligence

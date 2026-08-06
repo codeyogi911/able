@@ -405,7 +405,7 @@ describe('conversation routing', () => {
         target: 'support',
         module: 'helpdesk',
         entityType: 'case',
-        entityId: 'MD-1',
+        entityId: 'AD-1',
         intentId: 'route-support-before-classification',
       },
       markHandled: true,

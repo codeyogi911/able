@@ -70,8 +70,8 @@ beforeEach(async () => {
       body_markdown_template = 'Hi {{customer_name}},\n\n## Your fresh private link\n\n[Open your private case]({{case_link}})\n\n— {{workspace_name}} Support',
       updated_at = CURRENT_TIMESTAMP WHERE notification = 'case_recovery'`),
     env.DB.prepare(`UPDATE workspace_settings SET
-      display_name = 'Morrow Desk', portal_title = 'How can we help?', logo_url = NULL, favicon_url = NULL,
-      home_url = NULL, support_email = NULL, outbound_sender = NULL, case_prefix = 'MD',
+      display_name = 'Able Desk', portal_title = 'How can we help?', logo_url = NULL, favicon_url = NULL,
+      home_url = NULL, support_email = NULL, outbound_sender = NULL, case_prefix = 'AD',
       locale = 'en', timezone = 'UTC', support_hours_json = '{}', accent_color = '#b54a28',
       canvas_color = '#f5f2ec', ink_color = '#191918', font_family = 'system',
       portal_base_url = NULL, public_intake_enabled = 0, email_tested_at = NULL,

@@ -4,7 +4,7 @@ import { deliverOutbox } from '../src/email/outbox'
 import type { Env } from '../src/env'
 import worker from '../src/worker'
 
-const LOCAL_CAPABILITY_SECRET = 'morrow-local-capability-secret-not-for-production'
+const LOCAL_CAPABILITY_SECRET = 'able-local-capability-secret-not-for-production'
 
 type RpcEnvelope = {
   result?: {
@@ -44,7 +44,7 @@ function toolPayload(message: RpcEnvelope): Record<string, any> {
   return payload
 }
 
-describe('Morrow Desk Worker boundary', () => {
+describe('Able Desk Worker boundary', () => {
   it('processes stored attachment evidence through the media queue consumer', async () => {
     const bytes = new TextEncoder().encode('Customer diagnostic log from an uploaded file')
     await env.ATTACHMENTS.put('media/queued.txt', bytes)
@@ -56,7 +56,7 @@ describe('Morrow Desk Worker boundary', () => {
       queue?: (batch: MessageBatch<{ kind: 'process_media' }>, env: Env, ctx: ExecutionContext) => void | Promise<void>
     }
     expect(handler.queue).toBeTypeOf('function')
-    const batch = createMessageBatch('morrow-test-media', [{
+    const batch = createMessageBatch('able-test-media', [{
       id: 'media-message-1',
       timestamp: new Date('2026-07-18T00:00:00.000Z'),
       attempts: 1,
@@ -107,7 +107,7 @@ describe('Morrow Desk Worker boundary', () => {
   it('redirects legacy assistant pages to the fail-safe home while keeping the agent disabled by default', async () => {
     const voicePage = await SELF.fetch('https://support.example.test/voice', { redirect: 'manual' })
     const demoPage = await SELF.fetch('https://support.example.test/demo/voice', { redirect: 'manual' })
-    const agent = await SELF.fetch('https://support.example.test/agents/morrow-desk-agent/session-1')
+    const agent = await SELF.fetch('https://support.example.test/agents/able-desk-agent/session-1')
 
     expect(voicePage.status).toBe(308)
     expect(voicePage.headers.get('location')).toBe('https://support.example.test/')
@@ -126,7 +126,7 @@ describe('Morrow Desk Worker boundary', () => {
     const home = await SELF.fetch('https://support.example.test/')
     const homeHtml = await home.text()
     expect(home.status).toBe(200)
-    expect(homeHtml).toContain('Morrow Desk')
+    expect(homeHtml).toContain('Able Desk')
     expect(homeHtml).toContain('How can we help?')
     expect(homeHtml).not.toContain(['Fix', 'Company'].join(' '))
     expect(home.headers.get('content-security-policy')).toContain("default-src 'none'")
@@ -156,7 +156,7 @@ describe('Morrow Desk Worker boundary', () => {
   })
 
   it('lets the admin agent customize portal branding and renders it publicly', async () => {
-    const customized = toolPayload(await rpc('portal-branding', 'morrow_portal_customize', {
+    const customized = toolPayload(await rpc('portal-branding', 'able_portal_customize', {
       display_name: 'Example Company',
       portal_title: 'How can we help?',
       logo_url: 'https://cdn.example.test/support-mark.svg',
@@ -189,7 +189,7 @@ describe('Morrow Desk Worker boundary', () => {
       "SELECT event_type, evidence_json FROM audit_events WHERE event_type = 'workspace.settings_updated'",
     ).first()).toMatchObject({ event_type: 'workspace.settings_updated' })
 
-    const rejected = await rpc('portal-branding-invalid', 'morrow_portal_customize', {
+    const rejected = await rpc('portal-branding-invalid', 'able_portal_customize', {
       favicon_url: 'javascript:alert(1)',
     })
     expect(rejected.result?.isError).toBe(true)
@@ -225,10 +225,10 @@ describe('Morrow Desk Worker boundary', () => {
 
     expect(first.status).toBe(201)
     expect(replay.status).toBe(201)
-    expect(firstHtml).toContain('MD-1')
-    expect(replayHtml).toContain('MD-1')
-    expect(firstHtml).not.toContain('morrow_customer_capability')
-    expect(replayHtml).not.toContain('morrow_customer_capability')
+    expect(firstHtml).toContain('AD-1')
+    expect(replayHtml).toContain('AD-1')
+    expect(firstHtml).not.toContain('able_customer_capability')
+    expect(replayHtml).not.toContain('able_customer_capability')
     expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM cases').first()).toEqual({ count: 1 })
     expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM messages').first()).toEqual({ count: 1 })
     expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM operation_receipts').first()).toEqual({ count: 1 })
@@ -252,12 +252,12 @@ describe('Morrow Desk Worker boundary', () => {
     intakeForm.set('body', 'The display goes blank after one minute of warm-up.')
     const intake = await SELF.fetch('http://localhost/requests', { method: 'POST', body: intakeForm })
     expect(intake.status).toBe(201)
-    expect(await intake.text()).toContain('MD-1')
+    expect(await intake.text()).toContain('AD-1')
 
-    const next = toolPayload(await rpc('next', 'morrow_case_next'))
+    const next = toolPayload(await rpc('next', 'able_case_next'))
     expect(next).toMatchObject({
       kind: 'case',
-      ref: 'MD-1',
+      ref: 'AD-1',
       subject: 'Machine stops during warm-up',
       status: 'open',
       priority: 'normal',
@@ -274,7 +274,7 @@ describe('Morrow Desk Worker boundary', () => {
     ])
     expect(JSON.stringify(next)).not.toMatch(/capabilit|magic.?link|access_token|secret/i)
 
-    const reply = toolPayload(await rpc('reply', 'morrow_case_reply', {
+    const reply = toolPayload(await rpc('reply', 'able_case_reply', {
       ref: next.ref,
       revision: next.revision,
       body: 'Please disconnect power, then try the safe startup checklist.',
@@ -283,7 +283,7 @@ describe('Morrow Desk Worker boundary', () => {
       replayed: false,
       delivery: 'queued',
       case: {
-        ref: 'MD-1',
+        ref: 'AD-1',
         status: 'waiting_on_customer',
         assignee: { email: 'owner@example.com' },
       },
@@ -328,7 +328,7 @@ describe('Morrow Desk Worker boundary', () => {
     expect(delivery).toMatchObject({ considered: 2, accepted: 2, blocked: 0, failed: 0, indeterminate: 0 })
     const privateLinkEmail = delivered.find((message) => message.text.includes('Open your private case'))
     expect(privateLinkEmail).toBeTruthy()
-    expect(privateLinkEmail?.text).not.toContain('{{morrow_customer_capability}}')
+    expect(privateLinkEmail?.text).not.toContain('{{able_customer_capability}}')
     const privateUrl = privateLinkEmail!.text.match(/https?:\/\/\S+\/requests\/access#[A-Za-z0-9_-]+/)?.[0]
     expect(privateUrl).toBeTruthy()
     const capability = new URL(privateUrl!).hash.slice(1)
@@ -345,13 +345,13 @@ describe('Morrow Desk Worker boundary', () => {
       headers: {
         'content-type': 'application/json',
         origin: 'http://localhost',
-        'x-morrow-capability-exchange': '1',
+        'x-able-capability-exchange': '1',
       },
       body: JSON.stringify({ capability }),
     })
     expect(session.status).toBe(204)
     const customerCookie = session.headers.get('set-cookie')?.split(';', 1)[0]
-    expect(customerCookie).toContain('__Host-morrow_case=')
+    expect(customerCookie).toContain('__Host-able_case=')
 
     const customerView = await SELF.fetch('http://localhost/requests/case', {
       headers: { cookie: customerCookie! },
@@ -371,7 +371,7 @@ describe('Morrow Desk Worker boundary', () => {
     expect(customerReply.status).toBe(202)
     expect(await customerReply.text()).toContain('Your message is in the conversation.')
 
-    const reopened = toolPayload(await rpc('reopened', 'morrow_case_get', { ref: 'MD-1' }))
+    const reopened = toolPayload(await rpc('reopened', 'able_case_get', { ref: 'AD-1' }))
     expect(reopened).toMatchObject({ status: 'open' })
     expect(reopened.thread.at(-1)).toMatchObject({
       visibility: 'public',
@@ -379,7 +379,7 @@ describe('Morrow Desk Worker boundary', () => {
       body: 'The checklist worked briefly, but pressure dropped again after ten minutes.',
     })
 
-    const note = toolPayload(await rpc('note', 'morrow_case_add_note', {
+    const note = toolPayload(await rpc('note', 'able_case_add_note', {
       ref: reopened.ref,
       revision: reopened.revision,
       body: 'Customer completed the startup checklist; persistent pressure loss now needs service follow-up.',
@@ -387,19 +387,19 @@ describe('Morrow Desk Worker boundary', () => {
     expect(note.case).toMatchObject({ status: 'open' })
     expect(note.delivery).toBeNull()
 
-    const finalReply = toolPayload(await rpc('final-reply', 'morrow_case_reply', {
+    const finalReply = toolPayload(await rpc('final-reply', 'able_case_reply', {
       ref: note.case.ref,
       revision: note.case.revision,
       body: 'Thanks for confirming the checklist result. We have enough detail to arrange the next service step.',
     }))
     expect(finalReply.case).toMatchObject({ status: 'waiting_on_customer' })
 
-    const resolved = toolPayload(await rpc('resolve', 'morrow_case_update', {
+    const resolved = toolPayload(await rpc('resolve', 'able_case_update', {
       ref: finalReply.case.ref,
       revision: finalReply.case.revision,
       status: 'resolved',
     }))
-    expect(resolved.case).toMatchObject({ ref: 'MD-1', status: 'resolved' })
+    expect(resolved.case).toMatchObject({ ref: 'AD-1', status: 'resolved' })
 
     const finalCustomerView = await SELF.fetch('http://localhost/requests/case', {
       headers: { cookie: customerCookie! },
@@ -409,9 +409,9 @@ describe('Morrow Desk Worker boundary', () => {
     expect(finalCustomerHtml).toContain('We have enough detail to arrange the next service step.')
     expect(finalCustomerHtml).not.toContain('persistent pressure loss now needs service follow-up')
 
-    const finalSearch = toolPayload(await rpc('final-search', 'morrow_case_search', { query: 'MD-1' }))
+    const finalSearch = toolPayload(await rpc('final-search', 'able_case_search', { query: 'AD-1' }))
     expect(finalSearch.cases).toEqual([
-      expect.objectContaining({ ref: 'MD-1', status: 'resolved' }),
+      expect.objectContaining({ ref: 'AD-1', status: 'resolved' }),
     ])
   })
 
@@ -432,26 +432,26 @@ describe('Morrow Desk Worker boundary', () => {
     const intake = await SELF.fetch('http://localhost/requests', { method: 'POST', body: intakeForm })
     expect(intake.status).toBe(201)
 
-    const next = toolPayload(await rpc('crm-next', 'morrow_case_next'))
-    const unresolved = toolPayload(await rpc('crm-workspace-unresolved', 'morrow_customer_workspace', { ref: next.ref }))
+    const next = toolPayload(await rpc('crm-next', 'able_case_next'))
+    const unresolved = toolPayload(await rpc('crm-workspace-unresolved', 'able_customer_workspace', { ref: next.ref }))
     expect(unresolved).toMatchObject({
       schemaVersion: 'customer-workspace.v1',
       subject: { caseRef: next.ref, partyId: null },
       unknowns: ['directory_party_unresolved', 'crm_relationship_unavailable'],
     })
 
-    const adopted = toolPayload(await rpc('crm-adopt', 'morrow_party_adopt', {
+    const adopted = toolPayload(await rpc('crm-adopt', 'able_party_adopt', {
       ref: next.ref,
       revision: next.revision,
       intent_id: 'intent-worker-adopt-customer',
     }))
     const partyId = adopted.receipt.party.id as string
-    const relationship = toolPayload(await rpc('crm-relationship', 'morrow_crm_relationship', {
+    const relationship = toolPayload(await rpc('crm-relationship', 'able_crm_relationship', {
       party_id: partyId,
       intent_id: 'intent-worker-create-relationship',
       status: 'customer',
     }))
-    const activity = toolPayload(await rpc('crm-activity', 'morrow_crm_activity', {
+    const activity = toolPayload(await rpc('crm-activity', 'able_crm_activity', {
       party_id: partyId,
       intent_id: 'intent-worker-record-activity',
       revision: relationship.relationship.revision,
@@ -460,14 +460,14 @@ describe('Morrow Desk Worker boundary', () => {
       occurred_at: '2026-07-18T13:00:00.000Z',
       source_case_ref: next.ref,
     }))
-    const followUp = toolPayload(await rpc('crm-followup', 'morrow_crm_followup', {
+    const followUp = toolPayload(await rpc('crm-followup', 'able_crm_followup', {
       party_id: partyId,
       intent_id: 'intent-worker-schedule-followup',
       revision: activity.relationshipRevision,
       subject: 'Confirm the support outcome',
       due_at: '2026-07-20T09:00:00.000Z',
     }))
-    const tracked = toolPayload(await rpc('crm-operation-track', 'morrow_operation_track', {
+    const tracked = toolPayload(await rpc('crm-operation-track', 'able_operation_track', {
       operation_id: followUp.operationId,
       intent_id: 'intent-worker-track-followup',
       contract_name: 'crm.followup-confirmed.v1',
@@ -483,7 +483,7 @@ describe('Morrow Desk Worker boundary', () => {
       not_before: '2026-07-20T09:00:00.000Z',
       expires_at: '2026-07-27T09:00:00.000Z',
     }))
-    const telemetry = toolPayload(await rpc('crm-operation-telemetry', 'morrow_operation_observe', {
+    const telemetry = toolPayload(await rpc('crm-operation-telemetry', 'able_operation_observe', {
       operation_id: followUp.operationId,
       revision: tracked.closure.revision,
       intent_id: 'intent-worker-observe-telemetry',
@@ -493,7 +493,7 @@ describe('Morrow Desk Worker boundary', () => {
       summary: 'The follow-up command executed without an error.',
     }))
     expect(telemetry.closure).toMatchObject({ status: 'pending', reconciliation: 'pending' })
-    const confirmed = toolPayload(await rpc('crm-operation-confirmed', 'morrow_operation_observe', {
+    const confirmed = toolPayload(await rpc('crm-operation-confirmed', 'able_operation_observe', {
       operation_id: followUp.operationId,
       revision: telemetry.closure.revision,
       intent_id: 'intent-worker-observe-confirmation',
@@ -505,7 +505,7 @@ describe('Morrow Desk Worker boundary', () => {
     }))
     expect(confirmed.closure).toMatchObject({ status: 'succeeded', reconciliation: 'reconciled' })
 
-    const proposed = toolPayload(await rpc('crm-improvement-propose', 'morrow_improvement_propose', {
+    const proposed = toolPayload(await rpc('crm-improvement-propose', 'able_improvement_propose', {
       intent_id: 'intent-worker-propose-playbook',
       scope: 'tenant',
       artifact_kind: 'playbook',
@@ -514,7 +514,7 @@ describe('Morrow Desk Worker boundary', () => {
       candidate_version: 'v2',
       evidence_operation_id: followUp.operationId,
     }))
-    const selfEvaluation = await rpc('crm-improvement-evaluate', 'morrow_improvement_evaluate', {
+    const selfEvaluation = await rpc('crm-improvement-evaluate', 'able_improvement_evaluate', {
       intent_id: 'intent-worker-evaluate-playbook',
       proposal_id: proposed.proposal.id,
       revision: proposed.proposal.revision,
@@ -526,7 +526,7 @@ describe('Morrow Desk Worker boundary', () => {
     expect(selfEvaluation.result.isError).toBe(true)
     expect(selfEvaluation.result.content[0].text).toContain('different administrator')
     expect(proposed.proposal.status).toBe('proposed')
-    const composed = toolPayload(await rpc('crm-workspace-composed', 'morrow_customer_workspace', { ref: next.ref }))
+    const composed = toolPayload(await rpc('crm-workspace-composed', 'able_customer_workspace', { ref: next.ref }))
 
     expect(composed).toMatchObject({
       schemaVersion: 'customer-workspace.v1',
