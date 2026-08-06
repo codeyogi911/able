@@ -22,7 +22,7 @@ import { createCommunications } from '../src/communications'
 import { cleanupPortalFiles, storePortalFiles } from '../src/platform/files'
 
 const settings: WorkspaceSettingsView = {
-  displayName: 'Morrow Desk',
+  displayName: 'Able Desk',
   portalTitle: 'Support that keeps its word.',
   logoUrl: null,
   faviconUrl: null,
@@ -79,7 +79,7 @@ const workspace: CaseWorkspace = {
           filename: 'damage.jpg',
           contentType: 'image/jpeg',
           size: 42117,
-          resourceUri: 'morrow://attachments/attachment-1',
+          resourceUri: 'able://attachments/attachment-1',
         },
       ],
     },
@@ -157,7 +157,7 @@ describe('customer portal', () => {
     const html = await response.text()
 
     expect(response.status).toBe(200)
-    expect(html).toContain('Morrow Desk')
+    expect(html).toContain('Able Desk')
     expect(html).toContain('Support that keeps its word.')
     expect(html).toContain('Search the knowledge base')
     expect(html).toContain('Care guide')
@@ -183,7 +183,7 @@ describe('customer portal', () => {
     const plain = await (await portal().root.request('https://support.example.test/')).text()
     const suffixed = await (await portal(mockHelpdesk(), { ...settings, displayName: 'Example Company Support' }).root.request('https://support.example.test/')).text()
 
-    expect(plain).toContain('<title>Morrow Desk Support</title>')
+    expect(plain).toContain('<title>Able Desk Support</title>')
     expect(suffixed).toContain('<title>Example Company Support</title>')
     expect(suffixed).not.toContain('Support Support')
   })
@@ -291,7 +291,7 @@ describe('customer portal', () => {
     expect(await (await intake.root.request('https://support.example.test/requests/recover')).text())
       .toContain('data-action="recover"')
     expect(await (await intake.root.request('https://support.example.test/requests/case', {
-      headers: { cookie: '__Host-morrow_case=private-capability-token' },
+      headers: { cookie: '__Host-able_case=private-capability-token' },
     })).text())
       .toContain('data-action="reply"')
   })
@@ -359,13 +359,13 @@ describe('customer portal', () => {
       headers: {
         'content-type': 'application/json',
         origin: 'https://support.example.test',
-        'x-morrow-capability-exchange': '1',
+        'x-able-capability-exchange': '1',
       },
       body: JSON.stringify({ capability: 'super-secret-capability' }),
     })
     const setCookie = exchange.headers.get('set-cookie') ?? ''
     expect(exchange.status).toBe(204)
-    expect(setCookie).toContain('__Host-morrow_case=super-secret-capability')
+    expect(setCookie).toContain('__Host-able_case=super-secret-capability')
     expect(setCookie).toContain('HttpOnly')
     expect(setCookie).toContain('Secure')
     expect(setCookie).toContain('SameSite=Strict')
@@ -437,14 +437,14 @@ describe('customer portal', () => {
       customerResource,
     }))
     const response = await root.request('https://support.example.test/requests/attachments/attachment-1', {
-      headers: { cookie: '__Host-morrow_case=super-secret-capability' },
+      headers: { cookie: '__Host-able_case=super-secret-capability' },
     })
 
     expect(response.status).toBe(200)
     expect(new TextDecoder().decode(await response.arrayBuffer())).toBe('private-binary')
     expect(customerResource).toHaveBeenCalledWith(
       { token: 'super-secret-capability' },
-      'morrow://attachments/attachment-1',
+      'able://attachments/attachment-1',
     )
     expect(response.headers.get('cache-control')).toContain('no-store')
   })
@@ -454,7 +454,7 @@ describe('customer portal', () => {
     const { root } = portal(helpdesk)
     const response = await root.request('https://support.example.test/requests/case', {
       method: 'POST',
-      headers: { cookie: '__Host-morrow_case=super-secret-capability' },
+      headers: { cookie: '__Host-able_case=super-secret-capability' },
       body: new URLSearchParams({
         request_id: 'customer-reply-fixed-route-001',
         body: 'Here is the next diagnostic detail.',
@@ -650,7 +650,7 @@ describe('operator recovery console', () => {
           filename: 'setup-cycle.mp4',
           contentType: 'video/mp4',
           size: 9_865_008,
-          resourceUri: 'morrow://attachments/attachment-video',
+          resourceUri: 'able://attachments/attachment-video',
         }],
       }],
     }
@@ -675,17 +675,17 @@ describe('operator recovery console', () => {
 
     const page = await root.request('https://operators.example.test/ops/cases/MD-42')
     const html = await page.text()
-    const video = await root.request('https://operators.example.test/ops/video?uri=morrow%3A%2F%2Fattachments%2Fattachment-video')
+    const video = await root.request('https://operators.example.test/ops/video?uri=able%3A%2F%2Fattachments%2Fattachment-video')
 
     expect(page.status).toBe(200)
     expect(html).toContain('<video controls')
-    expect(html).toContain('/ops/video?uri=morrow%3A%2F%2Fattachments%2Fattachment-video')
+    expect(html).toContain('/ops/video?uri=able%3A%2F%2Fattachments%2Fattachment-video')
     expect(page.headers.get('content-security-policy')).toContain("media-src 'self'")
     expect(video.status).toBe(200)
     expect(video.headers.get('content-type')).toBe('video/mp4')
     expect(video.headers.get('content-disposition')).toBe('inline; filename="setup-cycle.mp4"')
     expect(new TextDecoder().decode(await video.arrayBuffer())).toBe('video-bytes')
-    expect(resource).toHaveBeenCalledWith(operator, 'morrow://attachments/attachment-video')
+    expect(resource).toHaveBeenCalledWith(operator, 'able://attachments/attachment-video')
   })
 
   it('queues the outbound setup test with the verified admin actor', async () => {

@@ -22,9 +22,9 @@ const BRANDING = voiceBranding({
 describe('voice demo boundary', () => {
   it('is fail-closed unless the exact demo flag is enabled', () => {
     expect(voiceDemoEnabled({})).toBe(false)
-    expect(voiceDemoEnabled({ MORROW_VOICE_DEMO_ENABLED: 'true' })).toBe(false)
-    expect(voiceDemoEnabled({ MORROW_VOICE_DEMO_ENABLED: '1' })).toBe(true)
-    expect(isVoiceDemoAgentPath('/agents/morrow-desk-agent/session-1')).toBe(true)
+    expect(voiceDemoEnabled({ ABLE_VOICE_DEMO_ENABLED: 'true' })).toBe(false)
+    expect(voiceDemoEnabled({ ABLE_VOICE_DEMO_ENABLED: '1' })).toBe(true)
+    expect(isVoiceDemoAgentPath('/agents/able-desk-agent/session-1')).toBe(true)
     expect(isVoiceDemoAgentPath('/agents/another-agent/session-1')).toBe(false)
   })
 
@@ -220,7 +220,7 @@ describe('voice demo boundary', () => {
     expect(html).not.toContain('id="metrics"')
     expect(html).not.toContain('Cloudflare-native path')
     expect(html).not.toContain('demo session')
-    expect(html).not.toContain('Morrow Desk')
+    expect(html).not.toContain('Able Desk')
     expect(html).not.toContain('Live browser call')
     expect(html).not.toContain('Live transcript')
     expect(html).not.toContain('voice-orb')

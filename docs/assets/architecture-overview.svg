@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="940" viewBox="0 0 1400 940" role="img" aria-labelledby="title desc">
-  <title id="title">Morrow Desk architecture overview</title>
+  <title id="title">Able Desk architecture overview</title>
   <desc id="desc">Operator agents and customer channels enter a Cloudflare Worker through narrow adapters. Deep Communications, Helpdesk, Directory, CRM, Operations, and Improvement modules own policy. D1, R2, queues, a Durable Object, Workers AI, Images, Email Service, and external providers form the platform layer.</desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
@@ -25,7 +25,7 @@
 
   <rect width="1400" height="940" fill="#f6f4ee"/>
   <text class="eyebrow" x="60" y="54">CURRENT V1</text>
-  <text class="title" x="60" y="101">Morrow Desk on Cloudflare</text>
+  <text class="title" x="60" y="101">Able Desk on Cloudflare</text>
   <text class="subtitle" x="60" y="132">Small agent interfaces at the edge; business truth stays inside deep modules.</text>
 
   <rect class="soft" x="60" y="175" width="490" height="130" rx="16"/>

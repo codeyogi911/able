@@ -80,7 +80,7 @@ const workspace: CaseWorkspace = {
       slug: 'safe-startup',
       title: 'Safe startup checklist',
       excerpt: 'A short checklist for the first power-on.',
-      resourceUri: 'morrow://articles/safe-startup',
+      resourceUri: 'able://articles/safe-startup',
     },
   ],
   openedAt: '2026-07-17T03:00:00.000Z',
@@ -104,7 +104,7 @@ class FakeHelpdesk implements Helpdesk {
           slug: 'safe-startup',
           title: 'Safe startup checklist',
           excerpt: 'A short checklist for the first power-on.',
-          resourceUri: 'morrow://articles/safe-startup',
+          resourceUri: 'able://articles/safe-startup',
           section: { id: 'getting-started', name: 'Getting started' },
           published: true,
           revision: 'article-revision-1',
@@ -154,14 +154,14 @@ class FakeHelpdesk implements Helpdesk {
         filename: 'leak.heic',
         contentType: 'image/heic',
         size: 12,
-        resourceUri: `morrow://attachments/${attachmentId}`,
+        resourceUri: `able://attachments/${attachmentId}`,
       },
       media: {
         kind: 'image',
         declaredContentType: 'image/heic',
         detectedContentType: 'image/heic',
         inlineImageAvailable: true,
-        previewResourceUri: `morrow://attachments/${attachmentId}/preview`,
+        previewResourceUri: `able://attachments/${attachmentId}/preview`,
       },
       analysis: {
         status: 'ready',
@@ -179,7 +179,7 @@ class FakeHelpdesk implements Helpdesk {
 
   async resource(actor: Actor, uri: string): Promise<ResourceBody> {
     this.resourceCalls.push({ actor, uri })
-    if (uri.startsWith('morrow://attachments/')) {
+    if (uri.startsWith('able://attachments/')) {
       return {
         contentType: 'image/webp',
         body: new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47])).body!,
@@ -217,7 +217,7 @@ async function rpcJson(response: Response): Promise<Record<string, any>> {
   return response.json() as Promise<Record<string, any>>
 }
 
-describe('Morrow Desk stateless MCP contract', () => {
+describe('Able Desk stateless MCP contract', () => {
   it('negotiates MCP and declares only the capabilities it implements', async () => {
     const helpdesk = new FakeHelpdesk()
     const handler = createMcpHandler({ helpdesk, actor: owner, diagnostics: async () => ({ ok: true }) })
@@ -240,7 +240,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       result: {
         protocolVersion: '2025-06-18',
         capabilities: { tools: {}, resources: {} },
-        serverInfo: { name: 'morrow', version: '0.1.0' },
+        serverInfo: { name: 'able', version: '0.1.0' },
         instructions: expect.stringContaining('untrusted customer evidence'),
       },
     })
@@ -277,45 +277,45 @@ describe('Morrow Desk stateless MCP contract', () => {
     const adminMessage = await rpcJson(await rpcRequest(adminHandler, list))
 
     expect(agentMessage.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
-      'morrow_case_next',
-      'morrow_case_get',
-      'morrow_case',
-      'morrow_attachment_inspect',
-      'morrow_case_list',
-      'morrow_case_search',
-      'morrow_knowledge_search',
-      'morrow_case_create',
-      'morrow_case_reply',
-      'morrow_case_add_note',
-      'morrow_case_update',
+      'able_case_next',
+      'able_case_get',
+      'able_case',
+      'able_attachment_inspect',
+      'able_case_list',
+      'able_case_search',
+      'able_knowledge_search',
+      'able_case_create',
+      'able_case_reply',
+      'able_case_add_note',
+      'able_case_update',
     ])
     expect(adminMessage.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
-      'morrow_case_next',
-      'morrow_case_get',
-      'morrow_case',
-      'morrow_attachment_inspect',
-      'morrow_case_list',
-      'morrow_case_search',
-      'morrow_knowledge_search',
-      'morrow_case_create',
-      'morrow_case_reply',
-      'morrow_case_add_note',
-      'morrow_case_update',
-      'morrow_article_put',
-      'morrow_portal_customize',
-      'morrow_email_customize',
-      'morrow_diagnostics',
+      'able_case_next',
+      'able_case_get',
+      'able_case',
+      'able_attachment_inspect',
+      'able_case_list',
+      'able_case_search',
+      'able_knowledge_search',
+      'able_case_create',
+      'able_case_reply',
+      'able_case_add_note',
+      'able_case_update',
+      'able_article_put',
+      'able_portal_customize',
+      'able_email_customize',
+      'able_diagnostics',
     ])
     for (const tool of adminMessage.result.tools) {
       expect(tool._meta).toMatchObject({
         ui: {
-          resourceUri: 'ui://morrow/workspace.html',
+          resourceUri: 'ui://able/workspace.html',
           visibility: ['model'],
         },
-        'ui/resourceUri': 'ui://morrow/workspace.html',
+        'ui/resourceUri': 'ui://able/workspace.html',
       })
     }
-    const attachmentTool = agentMessage.result.tools.find((tool: { name: string }) => tool.name === 'morrow_attachment_inspect')
+    const attachmentTool = agentMessage.result.tools.find((tool: { name: string }) => tool.name === 'able_attachment_inspect')
     expect(attachmentTool).toMatchObject({
       annotations: {
         readOnlyHint: true,
@@ -341,7 +341,7 @@ describe('Morrow Desk stateless MCP contract', () => {
     const helpdesk = new FakeHelpdesk()
     const read = vi.fn(async () => ({
       schemaVersion: 'portal-customization.v1' as const,
-      displayName: 'Morrow Desk',
+      displayName: 'Able Desk',
       portalTitle: 'How can we help?',
       logoUrl: null,
       faviconUrl: null,
@@ -367,11 +367,11 @@ describe('Morrow Desk stateless MCP contract', () => {
       jsonrpc: '2.0',
       id: 'portal-customization-read',
       method: 'tools/call',
-      params: { name: 'morrow_portal_customize', arguments: {} },
+      params: { name: 'able_portal_customize', arguments: {} },
     }))
     expect(JSON.parse(inspected.result.content[0].text)).toMatchObject({
       schemaVersion: 'portal-customization.v1',
-      displayName: 'Morrow Desk',
+      displayName: 'Able Desk',
       customCssSupported: false,
     })
     expect(update).not.toHaveBeenCalled()
@@ -381,7 +381,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       id: 'portal-customization-update',
       method: 'tools/call',
       params: {
-        name: 'morrow_portal_customize',
+        name: 'able_portal_customize',
         arguments: {
           display_name: 'Example Company',
           portal_title: 'How can we help?',
@@ -439,7 +439,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       jsonrpc: '2.0',
       id: 'email-customization-read',
       method: 'tools/call',
-      params: { name: 'morrow_email_customize', arguments: {} },
+      params: { name: 'able_email_customize', arguments: {} },
     }))
     expect(JSON.parse(inspected.result.content[0].text)).toMatchObject({
       schemaVersion: 'email-customization.v1',
@@ -452,7 +452,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       id: 'email-customization-update',
       method: 'tools/call',
       params: {
-        name: 'morrow_email_customize',
+        name: 'able_email_customize',
         arguments: {
           notification: 'agent_reply',
           enabled: false,
@@ -521,28 +521,28 @@ describe('Morrow Desk stateless MCP contract', () => {
 
     const listed = await rpcJson(await rpcRequest(handler, { jsonrpc: '2.0', id: 'suite-list', method: 'tools/list', params: {} }))
     expect(listed.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
-      'morrow_case_next',
-      'morrow_case_get',
-      'morrow_case',
-      'morrow_attachment_inspect',
-      'morrow_case_list',
-      'morrow_case_search',
-      'morrow_knowledge_search',
-      'morrow_case_create',
-      'morrow_case_reply',
-      'morrow_case_add_note',
-      'morrow_case_update',
-      'morrow_crm_lead_next',
-      'morrow_crm_lead',
-      'morrow_customer_workspace',
-      'morrow_party_adopt',
-      'morrow_crm_relationship',
-      'morrow_crm_activity',
-      'morrow_crm_followup',
-      'morrow_article_put',
-      'morrow_portal_customize',
-      'morrow_email_customize',
-      'morrow_diagnostics',
+      'able_case_next',
+      'able_case_get',
+      'able_case',
+      'able_attachment_inspect',
+      'able_case_list',
+      'able_case_search',
+      'able_knowledge_search',
+      'able_case_create',
+      'able_case_reply',
+      'able_case_add_note',
+      'able_case_update',
+      'able_crm_lead_next',
+      'able_crm_lead',
+      'able_customer_workspace',
+      'able_party_adopt',
+      'able_crm_relationship',
+      'able_crm_activity',
+      'able_crm_followup',
+      'able_article_put',
+      'able_portal_customize',
+      'able_email_customize',
+      'able_diagnostics',
     ])
 
     const call = async (id: string, name: string, arguments_: Record<string, unknown>) => rpcJson(await rpcRequest(handler, {
@@ -551,8 +551,8 @@ describe('Morrow Desk stateless MCP contract', () => {
       method: 'tools/call',
       params: { name, arguments: arguments_ },
     }))
-    const nextLead = await call('lead-next', 'morrow_crm_lead_next', {})
-    const readLead = await call('lead-read', 'morrow_crm_lead', { lead_id: 'lead-1' })
+    const nextLead = await call('lead-next', 'able_crm_lead_next', {})
+    const readLead = await call('lead-read', 'able_crm_lead', { lead_id: 'lead-1' })
     expect(nextLead.result.isError).toBe(false)
     expect(readLead.result.isError).toBe(false)
     expect(nextLead.result.structuredContent).toMatchObject({
@@ -563,25 +563,25 @@ describe('Morrow Desk stateless MCP contract', () => {
       source: { module: 'channels', entityType: 'conversation', entityId: 'conversation-1' },
     })
     expect(nextLead.result.structuredContent).toEqual(JSON.parse(nextLead.result.content[0].text))
-    for (const name of ['morrow_crm_lead_next', 'morrow_crm_lead']) {
+    for (const name of ['able_crm_lead_next', 'able_crm_lead']) {
       expect(listed.result.tools.find((tool: { name: string }) => tool.name === name)?._meta).toMatchObject({
-        ui: { resourceUri: 'ui://morrow/workspace.html', visibility: ['model'] },
-        'ui/resourceUri': 'ui://morrow/workspace.html',
+        ui: { resourceUri: 'ui://able/workspace.html', visibility: ['model'] },
+        'ui/resourceUri': 'ui://able/workspace.html',
       })
     }
-    expect((await call('workspace', 'morrow_customer_workspace', { ref: 'MD-42' })).result.isError).toBe(false)
-    expect((await call('adopt', 'morrow_party_adopt', {
+    expect((await call('workspace', 'able_customer_workspace', { ref: 'MD-42' })).result.isError).toBe(false)
+    expect((await call('adopt', 'able_party_adopt', {
       ref: 'MD-42',
       revision: 'revision-7',
       intent_id: 'intent-adopt-42',
     })).result.isError).toBe(false)
-    expect((await call('relationship', 'morrow_crm_relationship', {
+    expect((await call('relationship', 'able_crm_relationship', {
       party_id: 'party-42',
       intent_id: 'intent-relationship-42',
       status: 'customer',
       owner_id: owner.id,
     })).result.isError).toBe(false)
-    expect((await call('activity', 'morrow_crm_activity', {
+    expect((await call('activity', 'able_crm_activity', {
       party_id: 'party-42',
       intent_id: 'intent-activity-42',
       revision: 'crm-revision-1',
@@ -590,7 +590,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       occurred_at: '2026-07-18T13:00:00.000Z',
       source_case_ref: 'MD-42',
     })).result.isError).toBe(false)
-    expect((await call('followup', 'morrow_crm_followup', {
+    expect((await call('followup', 'able_crm_followup', {
       party_id: 'party-42',
       intent_id: 'intent-followup-42',
       revision: 'crm-revision-2',
@@ -646,7 +646,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       replyCapability: {
         available: true,
         reason: null,
-        nextAction: 'Use morrow_conversation_reply with the latest revision.',
+        nextAction: 'Use able_conversation_reply with the latest revision.',
       },
       attention: 'needs_attention' as const,
       resolution: null,
@@ -720,36 +720,36 @@ describe('Morrow Desk stateless MCP contract', () => {
       jsonrpc: '2.0', id: 'conversation-list', method: 'tools/list', params: {},
     }))
     expect(listed.result.tools.map((tool: { name: string }) => tool.name)).toEqual(expect.arrayContaining([
-      'morrow_inbox_next',
-      'morrow_inbox_list',
-      'morrow_conversation_get',
-      'morrow_conversation_route',
-      'morrow_conversation_classify',
-      'morrow_conversation_reopen',
-      'morrow_conversation_reply',
+      'able_inbox_next',
+      'able_inbox_list',
+      'able_conversation_get',
+      'able_conversation_route',
+      'able_conversation_classify',
+      'able_conversation_reopen',
+      'able_conversation_reply',
     ]))
 
     const call = async (id: string, name: string, arguments_: Record<string, unknown>) => rpcJson(await rpcRequest(handler, {
       jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: arguments_ },
     }))
-    const next = await call('inbox-next', 'morrow_inbox_next', {})
+    const next = await call('inbox-next', 'able_inbox_next', {})
     expect(next.result.isError, JSON.stringify(next.result)).toBe(false)
     expect(next.result.structuredContent).toMatchObject({
       schemaVersion: 'conversation-workspace.v2',
       id: 'conversation-1',
       messageWindow: { responseFormat: 'concise', total: 1, returned: 1, omitted: 0 },
     })
-    expect((await call('inbox-list', 'morrow_inbox_list', { limit: 2 })).result.isError).toBe(false)
-    expect((await call('conversation-get', 'morrow_conversation_get', {
+    expect((await call('inbox-list', 'able_inbox_list', { limit: 2 })).result.isError).toBe(false)
+    expect((await call('conversation-get', 'able_conversation_get', {
       conversation_id: 'conversation-1', response_format: 'detailed',
     })).result.isError).toBe(false)
-    expect((await call('conversation-route', 'morrow_conversation_route', {
+    expect((await call('conversation-route', 'able_conversation_route', {
       conversation_id: 'conversation-1',
       revision: 'conversation-revision-1',
       intent_id: 'route-sales-1',
       target: 'sales',
     })).result.isError).toBe(false)
-    const classify = await call('conversation-classify', 'morrow_conversation_classify', {
+    const classify = await call('conversation-classify', 'able_conversation_classify', {
       conversation_id: 'conversation-1',
       revision: 'conversation-revision-2',
       intent_id: 'clear-duplicate-1',
@@ -763,13 +763,13 @@ describe('Morrow Desk stateless MCP contract', () => {
       delivery: 'queued',
       conversation: { schemaVersion: 'conversation-workspace.v2', messageWindow: { returned: 1 } },
     })
-    expect((await call('conversation-reopen', 'morrow_conversation_reopen', {
+    expect((await call('conversation-reopen', 'able_conversation_reopen', {
       conversation_id: 'conversation-1',
       revision: 'conversation-revision-2',
       intent_id: 'reopen-duplicate-1',
       reason: 'The inquiry needs a sales lead after all.',
     })).result.isError).toBe(false)
-    expect((await call('conversation-reply', 'morrow_conversation_reply', {
+    expect((await call('conversation-reply', 'able_conversation_reply', {
       conversation_id: 'conversation-1',
       revision: 'conversation-revision-2',
       intent_id: 'reply-1',
@@ -847,7 +847,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       replyCapability: {
         available: true,
         reason: null,
-        nextAction: 'Use morrow_conversation_reply with the latest revision.',
+        nextAction: 'Use able_conversation_reply with the latest revision.',
       },
       attention: 'needs_attention' as const,
       resolution: null,
@@ -896,7 +896,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: arguments_ },
     }))
 
-    const newest = await call('long-newest', 'morrow_conversation_get', {
+    const newest = await call('long-newest', 'able_conversation_get', {
       conversation_id: conversation.id,
       response_format: 'detailed',
     })
@@ -910,7 +910,7 @@ describe('Morrow Desk stateless MCP contract', () => {
     )).toBe(true)
     expect(JSON.stringify(newest.result.structuredContent).length).toBeLessThan(75_000)
 
-    const expanded = await call('long-expanded', 'morrow_conversation_get', {
+    const expanded = await call('long-expanded', 'able_conversation_get', {
       conversation_id: conversation.id,
       message_id: 'message-61',
       message_offset: 1_000,
@@ -926,7 +926,7 @@ describe('Morrow Desk stateless MCP contract', () => {
     })
     expect(expanded.result.structuredContent.messageContent.body).toHaveLength(2_000)
 
-    const older = await call('long-older', 'morrow_conversation_get', {
+    const older = await call('long-older', 'able_conversation_get', {
       conversation_id: conversation.id,
       response_format: 'detailed',
       message_page: 1,
@@ -938,7 +938,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       nextAction: expect.stringContaining('message_id "message-1"'),
     })
 
-    const queue = await call('long-queue', 'morrow_inbox_list', { limit: 1 })
+    const queue = await call('long-queue', 'able_inbox_list', { limit: 1 })
     expect(queue.result.structuredContent.conversations[0]).toMatchObject({
       latestInboundTruncated: true,
       latestInboundBody: expect.stringMatching(/^Message 61:/),
@@ -992,17 +992,17 @@ describe('Morrow Desk stateless MCP contract', () => {
     }))
     const listed = await rpcJson(await rpcRequest(handler, { jsonrpc: '2.0', id: 'loop-list', method: 'tools/list', params: {} }))
     expect(listed.result.tools.map((tool: { name: string }) => tool.name)).toEqual(expect.arrayContaining([
-      'morrow_operation',
-      'morrow_operation_track',
-      'morrow_operation_observe',
-      'morrow_operation_expire',
-      'morrow_improvement',
-      'morrow_improvement_propose',
-      'morrow_improvement_evaluate',
+      'able_operation',
+      'able_operation_track',
+      'able_operation_observe',
+      'able_operation_expire',
+      'able_improvement',
+      'able_improvement_propose',
+      'able_improvement_evaluate',
     ]))
 
-    await call('operation-read', 'morrow_operation', { operation_id: 'op-target' })
-    await call('operation-track', 'morrow_operation_track', {
+    await call('operation-read', 'able_operation', { operation_id: 'op-target' })
+    await call('operation-track', 'able_operation_track', {
       operation_id: 'op-target',
       intent_id: 'intent-track',
       contract_name: 'crm.followup-confirmed.v1',
@@ -1018,7 +1018,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       not_before: '2026-07-18T15:00:00.000Z',
       expires_at: '2026-07-25T15:00:00.000Z',
     })
-    await call('operation-observe', 'morrow_operation_observe', {
+    await call('operation-observe', 'able_operation_observe', {
       operation_id: 'op-target',
       revision: 'closure-revision-1',
       intent_id: 'intent-observe',
@@ -1028,13 +1028,13 @@ describe('Morrow Desk stateless MCP contract', () => {
       result: 'succeeded',
       summary: 'The operator confirmed the follow-up outcome.',
     })
-    await call('operation-expire', 'morrow_operation_expire', {
+    await call('operation-expire', 'able_operation_expire', {
       operation_id: 'op-expiring',
       revision: 'closure-revision-expiring',
       intent_id: 'intent-expire',
     })
-    await call('improvement-read', 'morrow_improvement', { proposal_id: 'proposal-1' })
-    await call('improvement-propose', 'morrow_improvement_propose', {
+    await call('improvement-read', 'able_improvement', { proposal_id: 'proposal-1' })
+    await call('improvement-propose', 'able_improvement_propose', {
       intent_id: 'intent-propose',
       scope: 'tenant',
       artifact_kind: 'playbook',
@@ -1043,7 +1043,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       candidate_version: 'v2',
       evidence_operation_id: 'op-target',
     })
-    await call('improvement-evaluate', 'morrow_improvement_evaluate', {
+    await call('improvement-evaluate', 'able_improvement_evaluate', {
       intent_id: 'intent-evaluate',
       proposal_id: 'proposal-1',
       revision: 'proposal-revision-1',
@@ -1125,7 +1125,7 @@ describe('Morrow Desk stateless MCP contract', () => {
     ])
   })
 
-  it('handles a normal case with morrow_case_next followed by morrow_case_reply', async () => {
+  it('handles a normal case with able_case_next followed by able_case_reply', async () => {
     const helpdesk = new FakeHelpdesk()
     const handler = createMcpHandler({ helpdesk, actor: agent, diagnostics: async () => ({ ok: true }) })
 
@@ -1134,7 +1134,7 @@ describe('Morrow Desk stateless MCP contract', () => {
         jsonrpc: '2.0',
         id: 'next',
         method: 'tools/call',
-        params: { name: 'morrow_case_next', arguments: {} },
+        params: { name: 'able_case_next', arguments: {} },
       }),
     )
 
@@ -1151,7 +1151,7 @@ describe('Morrow Desk stateless MCP contract', () => {
         id: 'reply',
         method: 'tools/call',
         params: {
-          name: 'morrow_case_reply',
+          name: 'able_case_reply',
           arguments: { ref: 'MD-42', revision: 'revision-7', body: 'Please try the startup checklist.' },
         },
       }),
@@ -1186,7 +1186,7 @@ describe('Morrow Desk stateless MCP contract', () => {
         id: 'metadata-compatible-call',
         method: 'tools/call',
         params: {
-          name: 'morrow_case_get',
+          name: 'able_case_get',
           arguments: { ref: 'MD-42' },
           _meta: { progressToken: 'progress-1', 'example.dev/client': 'codex' },
         },
@@ -1212,13 +1212,13 @@ describe('Morrow Desk stateless MCP contract', () => {
       jsonrpc: '2.0',
       id: 'case-browser-url',
       method: 'tools/call',
-      params: { name: 'morrow_case', arguments: { ref: 'MD-42' } },
+      params: { name: 'able_case', arguments: { ref: 'MD-42' } },
     }))
     const attachmentMessage = await rpcJson(await rpcRequest(handler, {
       jsonrpc: '2.0',
       id: 'attachment-browser-url',
       method: 'tools/call',
-      params: { name: 'morrow_attachment_inspect', arguments: { attachment_id: 'att_image' } },
+      params: { name: 'able_attachment_inspect', arguments: { attachment_id: 'att_image' } },
     }))
 
     const expected = 'https://operators.example.test/ops/cases/MD-42'
@@ -1236,7 +1236,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       id: 'attachment-summary',
       method: 'tools/call',
       params: {
-        name: 'morrow_attachment_inspect',
+        name: 'able_attachment_inspect',
         arguments: { attachment_id: 'att_image', detail: 'summary' },
       },
     }))
@@ -1256,7 +1256,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       id: 'attachment-visual',
       method: 'tools/call',
       params: {
-        name: 'morrow_attachment_inspect',
+        name: 'able_attachment_inspect',
         arguments: { attachment_id: 'att_image', detail: 'visual', focus: 'Where is the leak?' },
       },
     }))
@@ -1272,7 +1272,7 @@ describe('Morrow Desk stateless MCP contract', () => {
       { actor: agent, attachmentId: 'att_image' },
       { actor: agent, attachmentId: 'att_image' },
     ])
-    expect(helpdesk.resourceCalls.at(-1)).toEqual({ actor: agent, uri: 'morrow://attachments/att_image/preview' })
+    expect(helpdesk.resourceCalls.at(-1)).toEqual({ actor: agent, uri: 'able://attachments/att_image/preview' })
   })
 
   it('searches knowledge through the Helpdesk work seam', async () => {
@@ -1285,7 +1285,7 @@ describe('Morrow Desk stateless MCP contract', () => {
         id: 'knowledge-search',
         method: 'tools/call',
         params: {
-          name: 'morrow_knowledge_search',
+          name: 'able_knowledge_search',
           arguments: { query: 'startup', limit: 3 },
         },
       }),
@@ -1301,7 +1301,7 @@ describe('Morrow Desk stateless MCP contract', () => {
     })
   })
 
-  it('passes customer corrections through morrow_case_update without allowing identity overrides', async () => {
+  it('passes customer corrections through able_case_update without allowing identity overrides', async () => {
     const helpdesk = new FakeHelpdesk()
     const handler = createMcpHandler({ helpdesk, actor: agent, diagnostics: async () => ({ ok: true }) })
 
@@ -1311,7 +1311,7 @@ describe('Morrow Desk stateless MCP contract', () => {
         id: 'customer-correction',
         method: 'tools/call',
         params: {
-          name: 'morrow_case_update',
+          name: 'able_case_update',
           arguments: {
             ref: 'MD-42',
             revision: 'revision-7',
@@ -1349,7 +1349,7 @@ describe('Morrow Desk stateless MCP contract', () => {
         id: 4,
         method: 'tools/call',
         params: {
-          name: 'morrow_case_reply',
+          name: 'able_case_reply',
           arguments: {
             ref: 'MD-42',
             revision: 'revision-7',
@@ -1378,9 +1378,9 @@ describe('Morrow Desk stateless MCP contract', () => {
       }),
     )
     expect(templates.result.resourceTemplates.map((resource: { uriTemplate: string }) => resource.uriTemplate)).toEqual([
-      'morrow://attachments/{id}',
-      'morrow://attachments/{id}/{representation}',
-      'morrow://articles/{slug}',
+      'able://attachments/{id}',
+      'able://attachments/{id}/{representation}',
+      'able://articles/{slug}',
     ])
 
     const resources = await rpcJson(
@@ -1393,8 +1393,8 @@ describe('Morrow Desk stateless MCP contract', () => {
     )
     expect(resources.result.resources).toEqual([
       expect.objectContaining({
-        uri: 'ui://morrow/workspace.html',
-        name: 'Morrow Desk workspace cards',
+        uri: 'ui://able/workspace.html',
+        name: 'Able Desk workspace cards',
         mimeType: 'text/html;profile=mcp-app',
         _meta: { ui: { prefersBorder: false } },
       }),
@@ -1405,15 +1405,15 @@ describe('Morrow Desk stateless MCP contract', () => {
         jsonrpc: '2.0',
         id: 'app-resource',
         method: 'resources/read',
-        params: { uri: 'ui://morrow/workspace.html' },
+        params: { uri: 'ui://able/workspace.html' },
       }),
     )
     expect(app.result.contents[0]).toMatchObject({
-      uri: 'ui://morrow/workspace.html',
+      uri: 'ui://able/workspace.html',
       mimeType: 'text/html;profile=mcp-app',
       _meta: { ui: { prefersBorder: false } },
     })
-    expect(app.result.contents[0].text).toContain('<title>Morrow Desk</title>')
+    expect(app.result.contents[0].text).toContain('<title>Able Desk</title>')
     expect(app.result.contents[0].text).toContain('Content-Security-Policy')
     expect(app.result.contents[0].text).not.toMatch(/<(?:script|link)[^>]+(?:src|href)=/i)
 
@@ -1422,15 +1422,15 @@ describe('Morrow Desk stateless MCP contract', () => {
         jsonrpc: '2.0',
         id: 6,
         method: 'resources/read',
-        params: { uri: 'morrow://articles/safe-startup' },
+        params: { uri: 'able://articles/safe-startup' },
       }),
     )
     expect(article.result.contents[0]).toMatchObject({
-      uri: 'morrow://articles/safe-startup',
+      uri: 'able://articles/safe-startup',
       mimeType: 'text/markdown; charset=utf-8',
       text: '# Safe startup\n\nDisconnect power before inspection.',
     })
-    expect(helpdesk.resourceCalls).toEqual([{ actor: agent, uri: 'morrow://articles/safe-startup' }])
+    expect(helpdesk.resourceCalls).toEqual([{ actor: agent, uri: 'able://articles/safe-startup' }])
 
     const forbidden = await rpcJson(
       await rpcRequest(handler, {
@@ -1461,12 +1461,12 @@ describe('Morrow Desk stateless MCP contract', () => {
         jsonrpc: '2.0',
         id: 8,
         method: 'tools/call',
-        params: { name: 'morrow_diagnostics', arguments: {} },
+        params: { name: 'able_diagnostics', arguments: {} },
       }),
     )
 
     expect(message.result.isError).toBe(true)
-    expect(message.result.content[0].text).toContain('Tool morrow_diagnostics not found')
+    expect(message.result.content[0].text).toContain('Tool able_diagnostics not found')
     expect(diagnosticsCalled).toBe(false)
   })
 
@@ -1533,8 +1533,8 @@ describe('Cloudflare Access identity boundary', () => {
   it('permits the explicit development identity only on localhost or in Worker tests', async () => {
     const localEnv = {
       DB: workerEnv.DB,
-      MORROW_DEV_EMAIL: 'local-owner@example.com',
-      MORROW_OWNER_EMAIL: 'local-owner@example.com',
+      ABLE_DEV_EMAIL: 'local-owner@example.com',
+      ABLE_OWNER_EMAIL: 'local-owner@example.com',
     } as Env
 
     const localActor = await authenticateAccess(new Request('http://localhost/mcp'), localEnv)
@@ -1573,7 +1573,7 @@ describe('Cloudflare Access identity boundary', () => {
       DB: workerEnv.DB,
       CF_ACCESS_AUD: 'application-audience',
       CF_ACCESS_TEAM_DOMAIN: issuer,
-      MORROW_OWNER_EMAIL: 'owner@example.com',
+      ABLE_OWNER_EMAIL: 'owner@example.com',
     } as Env
 
     const ownerToken = await signedAccessToken(keys.privateKey, {

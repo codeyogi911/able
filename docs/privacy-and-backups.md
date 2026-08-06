@@ -1,6 +1,6 @@
 # Privacy, retention, and backups
 
-Morrow Desk stores customer identity, support conversations, CRM relationship records, attachments, operator actions, delivery evidence, outcome observations, and improvement metadata. The deployer—not the upstream project—controls and is responsible for that data.
+Able Desk stores customer identity, support conversations, CRM relationship records, attachments, operator actions, delivery evidence, outcome observations, and improvement metadata. The deployer—not the upstream project—controls and is responsible for that data.
 
 ## Minimum deployment policy
 

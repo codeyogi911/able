@@ -96,7 +96,7 @@ class ExplicitConversationRouter implements ConversationRouter {
     const intentId = clean(input.intentId, 'Intent ID', 240)
     const loaded = await this.dependencies.communications.work(actor, { kind: 'conversation', id: conversationId })
     if (!loaded) throw new Error('Conversation not found')
-    if (loaded.resolution) throw new Error('Use morrow_conversation_reopen before routing a final no-work classification')
+    if (loaded.resolution) throw new Error('Use able_conversation_reopen before routing a final no-work classification')
     let conversation: ConversationWorkspace = loaded
     const targets: Array<'support' | 'sales'> = input.target === 'both' ? ['support', 'sales'] : [input.target]
     const matchingIntent = conversation.routes.filter((route) =>

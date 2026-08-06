@@ -13,10 +13,10 @@ function required(env, name, pattern) {
 }
 
 export function createProductionConfig(source, env) {
-  const databaseId = required(env, 'MORROW_D1_DATABASE_ID', /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
-  const databaseName = required(env, 'MORROW_D1_DATABASE_NAME', /^[a-z0-9][a-z0-9_-]{1,62}$/)
-  const bucketName = required(env, 'MORROW_R2_BUCKET_NAME', /^[a-z0-9][a-z0-9_-]{1,62}$/)
-  const queueName = required(env, 'MORROW_MEDIA_QUEUE_NAME', /^[a-z0-9][a-z0-9_-]{1,62}$/)
+  const databaseId = required(env, 'ABLE_D1_DATABASE_ID', /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+  const databaseName = required(env, 'ABLE_D1_DATABASE_NAME', /^[a-z0-9][a-z0-9_-]{1,62}$/)
+  const bucketName = required(env, 'ABLE_R2_BUCKET_NAME', /^[a-z0-9][a-z0-9_-]{1,62}$/)
+  const queueName = required(env, 'ABLE_MEDIA_QUEUE_NAME', /^[a-z0-9][a-z0-9_-]{1,62}$/)
   const config = structuredClone(source)
 
   const database = config.d1_databases?.find((binding) => binding.binding === 'DB')

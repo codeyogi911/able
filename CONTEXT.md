@@ -1,6 +1,6 @@
-# Morrow Desk Business Suite
+# Able Desk Business Suite
 
-Morrow Desk is an agent-operated business suite in which distinct business modules share verified identity and evidence without collapsing their work into one generic record.
+Able Desk is an agent-operated business suite in which distinct business modules share verified identity and evidence without collapsing their work into one generic record.
 
 ## Language
 

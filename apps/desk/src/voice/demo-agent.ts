@@ -52,7 +52,7 @@ import {
 import { dedupAssistantText } from './dedup'
 
 const VoiceAgent = withVoice(Agent, { historyLimit: 16, maxMessageCount: 80 })
-const LOCAL_SECRET = 'morrow-local-capability-secret-not-for-production'
+const LOCAL_SECRET = 'able-local-capability-secret-not-for-production'
 
 type VoiceConnectionState = {
   clientIp?: string
@@ -92,7 +92,7 @@ function cleanError(): string {
   return 'Voice support could not complete that action. Please use the support request form.'
 }
 
-export class MorrowDeskAgent extends VoiceAgent<Env> {
+export class AbleDeskAgent extends VoiceAgent<Env> {
   transcriber = new WorkersAIFluxSTT(this.env.AI, {
     eotThreshold: 0.7,
     keyterms: ['printer', 'router', 'paper tray'],

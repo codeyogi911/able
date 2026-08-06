@@ -54,7 +54,7 @@ describe('Customer workspace context contract', () => {
     const unresolved = await customerWorkspace.load(owner, deskCase.ref)
     expect(unresolved).toMatchObject({
       schemaVersion: 'customer-workspace.v1',
-      ontologyVersion: 'morrow-business.v1',
+      ontologyVersion: 'able-business.v1',
       kind: 'customer_workspace',
       asOf: '2026-07-18T14:00:00.000Z',
       subject: { caseRef: deskCase.ref, helpdeskCustomerId: deskCase.customer.id, partyId: null },

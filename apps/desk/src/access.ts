@@ -293,8 +293,8 @@ export async function authenticateAccess(
   env: Env,
   verification: AccessVerificationOptions = {},
 ): Promise<Actor> {
-  const ownerEmail = normalizeEmail(env.MORROW_OWNER_EMAIL)
-  const developmentEmail = normalizeEmail(env.MORROW_DEV_EMAIL)
+  const ownerEmail = normalizeEmail(env.ABLE_OWNER_EMAIL)
+  const developmentEmail = normalizeEmail(env.ABLE_DEV_EMAIL)
   if (developmentEmail && isDevelopmentRequest(request, env)) {
     return provisionOperator(env.DB, developmentEmail, displayName(undefined, developmentEmail), ownerEmail || developmentEmail)
   }

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="800" viewBox="0 0 1400 800" role="img" aria-labelledby="title desc">
-  <title id="title">Proposed Morrow bounded context graph</title>
+  <title id="title">Proposed Able bounded context graph</title>
   <desc id="desc">Canonical business modules emit a rebuildable node and edge projection into D1 and optional embeddings into Vectorize. An authorized context lens resolves a seed, traverses selected typed edges within budgets, hydrates current module projections, and returns a cited context envelope to an agent.</desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">

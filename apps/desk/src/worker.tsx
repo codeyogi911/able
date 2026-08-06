@@ -43,7 +43,7 @@ import {
   voiceDemoPageResponse,
 } from './voice/demo-page'
 
-const LOCAL_CAPABILITY_SECRET = 'morrow-local-capability-secret-not-for-production'
+const LOCAL_CAPABILITY_SECRET = 'able-local-capability-secret-not-for-production'
 const FONT_FAMILIES = new Set<WorkspaceSettingsView['fontFamily']>(['system', 'humanist', 'geometric', 'rounded'])
 type MediaQueueMessage = { kind: 'process_media' }
 
@@ -308,7 +308,7 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
   const url = new URL(request.url)
   try {
     const operatorPath = url.pathname === '/mcp' || url.pathname === '/ops' || url.pathname.startsWith('/ops/')
-    const surface = requestSurface(url, env.MORROW_OPERATOR_HOSTNAME)
+    const surface = requestSurface(url, env.ABLE_OPERATOR_HOSTNAME)
     if (surface === 'operator' && !operatorPath) {
       return notFoundResponse()
     }
@@ -413,4 +413,4 @@ export default {
   },
 } satisfies ExportedHandler<Env, MediaQueueMessage>
 
-export { MorrowDeskAgent } from './voice/demo-agent'
+export { AbleDeskAgent } from './voice/demo-agent'

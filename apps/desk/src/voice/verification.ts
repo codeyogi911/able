@@ -48,7 +48,7 @@ function secureCode(): string {
 async function hmacKey(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     'raw',
-    encoder.encode(`morrow.voice-verification.v1\0${secret}`),
+    encoder.encode(`able.voice-verification.v1\0${secret}`),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign', 'verify'],

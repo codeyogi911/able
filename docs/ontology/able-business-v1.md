@@ -1,6 +1,6 @@
-# Morrow Desk business ontology v1
+# Able Desk business ontology v1
 
-Version identifier: `morrow-business.v1`
+Version identifier: `able-business.v1`
 
 This deliberately small ontology is the semantic contract for the first Desk + CRM tracer. It is implemented through typed module interfaces and relational projections; it is not a generic writable graph or a replacement for module invariants.
 

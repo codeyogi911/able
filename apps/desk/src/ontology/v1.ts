@@ -1,7 +1,7 @@
-export const MORROW_ONTOLOGY_VERSION = 'morrow-business.v1' as const
+export const ABLE_ONTOLOGY_VERSION = 'able-business.v1' as const
 
-export const MORROW_ONTOLOGY_V1 = {
-  version: MORROW_ONTOLOGY_VERSION,
+export const ABLE_ONTOLOGY_V1 = {
+  version: ABLE_ONTOLOGY_VERSION,
   terms: {
     Party: 'A canonical person or organization identity owned by Directory.',
     HelpdeskCustomer: 'A module-local customer snapshot participating in a support case.',

@@ -20,7 +20,7 @@ type DocumentProps = {
 }
 
 function Brand({ identity }: { identity: IdentityView }) {
-  const name = identity.displayName.trim() || 'Morrow Desk'
+  const name = identity.displayName.trim() || 'Able Desk'
   const mark = name.slice(0, 2).toUpperCase()
   const logoUrl = safeLink(identity.logoUrl)
   const homeUrl = safeLink(identity.homeUrl)
@@ -66,7 +66,7 @@ export function PortalDocument({ title, identity, children, turnstile = false, f
         <title>{title}</title>
         {faviconUrl ? <link rel="icon" href={faviconUrl} /> : null}
         <link rel="stylesheet" href="/workspace-theme.css" />
-        <link rel="stylesheet" href="/morrow.css" />
+        <link rel="stylesheet" href="/able.css" />
         {turnstile ? <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script> : null}
         <script src="/portal-search.js" defer></script>
       </head>

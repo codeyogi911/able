@@ -56,7 +56,7 @@ const elements = {
 
 const supportTaskButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-support-message]')]
 
-const RESET_FOCUS_KEY = 'morrow-voice-support-reset-focus'
+const RESET_FOCUS_KEY = 'able-voice-support-reset-focus'
 
 function sessionName(): string {
   // Help always opens at its landing page. A browser refresh is a new visit,
@@ -65,7 +65,7 @@ function sessionName(): string {
 }
 
 const client = new VoiceClient({
-  agent: 'MorrowDeskAgent',
+  agent: 'AbleDeskAgent',
   name: sessionName(),
   preferredFormat: 'mp3',
 })

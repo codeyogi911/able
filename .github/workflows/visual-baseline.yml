@@ -22,10 +22,14 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Generate Linux goldens
-        run: npm run test:visual --workspace @morrow/desk -- --update-snapshots
+        # --update-snapshots defaults to "changed", which leaves a golden in
+        # place whenever the rendered diff stays under maxDiffPixelRatio. A
+        # brand or copy change can hide there. This workflow exists to produce
+        # the reviewed goldens, so it always rewrites all of them.
+        run: npm run test:visual --workspace @able/desk -- --update-snapshots=all
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: morrow-linux-visual-baselines
+          name: able-linux-visual-baselines
           path: apps/desk/test/visual/snapshots/linux/
           if-no-files-found: error
           retention-days: 7

@@ -1,7 +1,7 @@
 import { workspaceShortName } from '../settings'
 
-export const VOICE_DEMO_AGENT_NAME = 'MorrowDeskAgent'
-export const VOICE_DEMO_AGENT_PATH = '/agents/morrow-desk-agent/'
+export const VOICE_DEMO_AGENT_NAME = 'AbleDeskAgent'
+export const VOICE_DEMO_AGENT_PATH = '/agents/able-desk-agent/'
 
 export type VoiceBranding = {
   displayName: string
@@ -17,8 +17,8 @@ export type VoiceHelpTopic = {
   articles: Array<{ slug: string; title: string }>
 }
 
-export function voiceDemoEnabled(env: { MORROW_VOICE_DEMO_ENABLED?: string }): boolean {
-  return env.MORROW_VOICE_DEMO_ENABLED === '1'
+export function voiceDemoEnabled(env: { ABLE_VOICE_DEMO_ENABLED?: string }): boolean {
+  return env.ABLE_VOICE_DEMO_ENABLED === '1'
 }
 
 export function isVoiceDemoAgentPath(pathname: string): boolean {

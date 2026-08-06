@@ -1,7 +1,7 @@
 PRAGMA foreign_keys = ON;
 
 UPDATE workspace_settings
-SET display_name = 'Morrow Desk',
+SET display_name = 'Able Desk',
     portal_title = 'How can we help?',
     support_email = 'help@example.test',
     outbound_sender = 'support@example.test',

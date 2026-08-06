@@ -28,7 +28,7 @@ const caseWorkspace = {
       body: 'Pressure drops below 6 bar about twelve minutes after startup. <img src=x onerror="window.__xss = true">',
       createdAt: '2026-07-18T03:05:00.000Z',
       delivery: null,
-      attachments: [{ id: 'attachment-1', filename: 'pressure-log.txt', contentType: 'text/plain', size: 18342, resourceUri: 'morrow://attachments/attachment-1' }],
+      attachments: [{ id: 'attachment-1', filename: 'pressure-log.txt', contentType: 'text/plain', size: 18342, resourceUri: 'able://attachments/attachment-1' }],
     },
     {
       id: 'message-2',
@@ -47,7 +47,7 @@ const caseWorkspace = {
     slug: 'safe-startup',
     title: 'Safe startup checklist',
     excerpt: 'Checks to complete before inspecting pressure or opening the machine.',
-    resourceUri: 'morrow://articles/safe-startup',
+    resourceUri: 'able://articles/safe-startup',
   }],
   openedAt: '2026-07-18T03:05:00.000Z',
   updatedAt: '2026-07-18T03:18:00.000Z',
@@ -59,7 +59,7 @@ async function mountApp(
   theme: 'light' | 'dark' = 'light',
   content: Array<Record<string, unknown>> = [],
 ) {
-  await page.setContent('<iframe id="mcp-app" title="Morrow Desk MCP App" sandbox="allow-scripts" style="width:100%;border:0"></iframe>')
+  await page.setContent('<iframe id="mcp-app" title="Able Desk MCP App" sandbox="allow-scripts" style="width:100%;border:0"></iframe>')
   await page.evaluate(({ html, payload, hostTheme, eventContent }) => {
     const iframe = document.querySelector<HTMLIFrameElement>('#mcp-app')
     if (!iframe) throw new Error('MCP App iframe is missing')
@@ -71,7 +71,7 @@ async function mountApp(
           id: event.data.id,
           result: {
             protocolVersion: '2026-01-26',
-            hostInfo: { name: 'Morrow Desk visual host', version: '1.0.0' },
+            hostInfo: { name: 'Able Desk visual host', version: '1.0.0' },
             hostCapabilities: {},
             hostContext: { theme: hostTheme, displayMode: 'inline', locale: 'en-SG' },
           },
@@ -174,14 +174,14 @@ test('renders bounded attachment evidence as an untrusted visual card', async ({
       filename: 'group-head-leak.heic',
       contentType: 'image/heic',
       size: 2_480_000,
-      resourceUri: 'morrow://attachments/attachment-photo',
+      resourceUri: 'able://attachments/attachment-photo',
     },
     media: {
       kind: 'image',
       declaredContentType: 'image/heic',
       detectedContentType: 'image/heic',
       inlineImageAvailable: true,
-      previewResourceUri: 'morrow://attachments/attachment-photo/preview',
+      previewResourceUri: 'able://attachments/attachment-photo/preview',
     },
     analysis: {
       status: 'ready',

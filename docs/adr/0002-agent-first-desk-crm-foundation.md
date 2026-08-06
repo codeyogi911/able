@@ -6,9 +6,9 @@
 
 ## Context
 
-Morrow Desk begins as a deep support module, but its intended product is an agent-first ERP for service businesses. Its first extensions must prove shared identity, cross-module decision context, typed module commands, durable outcomes, and controlled improvement rather than broad CRM feature parity or a generic ERP framework.
+Able Desk begins as a deep support module, but its intended product is an agent-first ERP for service businesses. Its first extensions must prove shared identity, cross-module decision context, typed module commands, durable outcomes, and controlled improvement rather than broad CRM feature parity or a generic ERP framework.
 
-Traditional admin software makes screens and records the primary interface. Morrow Desk instead treats agents as the normal operators, MCP as an adapter over business capabilities, deterministic modules as the systems of record, and the recovery console as a thin independent control surface.
+Traditional admin software makes screens and records the primary interface. Able Desk instead treats agents as the normal operators, MCP as an adapter over business capabilities, deterministic modules as the systems of record, and the recovery console as a thin independent control surface.
 
 ## Decision
 
@@ -39,7 +39,7 @@ Every context envelope identifies its schema version, observation time, module r
 
 ### Mutation and authority
 
-Principal, executor, client, and delegation remain distinct concepts. The current release has a verified operator principal and the Morrow Desk MCP executor; future delegation fields may be added without accepting actor identity from tool arguments.
+Principal, executor, client, and delegation remain distinct concepts. The current release has a verified operator principal and the Able Desk MCP executor; future delegation fields may be added without accepting actor identity from tool arguments.
 
 Every mutation has an idempotency identity and immutable receipt. Updates to mutable aggregates require the latest opaque revision. Cross-module work uses typed orchestration and compensation rather than table access or distributed transactions.
 

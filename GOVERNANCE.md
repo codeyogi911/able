@@ -1,6 +1,6 @@
 # Governance
 
-Morrow Desk is a maintainer-led project.
+Able Desk is a maintainer-led project.
 
 ## Roles
 

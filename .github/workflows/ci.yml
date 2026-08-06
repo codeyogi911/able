@@ -22,7 +22,7 @@ jobs:
       - run: npm ci
       - run: npm run check
         env:
-          MORROW_PRIVATE_DENYLIST: ${{ secrets.MORROW_PRIVATE_DENYLIST }}
+          ABLE_PRIVATE_DENYLIST: ${{ secrets.ABLE_PRIVATE_DENYLIST }}
       - name: Build deploy artifact without publishing
         run: npx wrangler deploy --dry-run --config apps/desk/wrangler.jsonc --outdir apps/desk/dist/worker
 
@@ -39,7 +39,7 @@ jobs:
       - name: Scan private identifiers across complete main history
         if: github.event_name == 'push'
         env:
-          PUBLIC_HISTORY_DENYLIST: ${{ secrets.MORROW_PRIVATE_DENYLIST }}
+          PUBLIC_HISTORY_DENYLIST: ${{ secrets.ABLE_PRIVATE_DENYLIST }}
         run: npm run scan:history
       - name: Install pinned Gitleaks
         env:

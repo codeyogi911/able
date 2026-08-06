@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "morrow-test",
+  "name": "able-test",
   "main": "src/worker.tsx",
   "compatibility_date": "2026-07-18",
   "compatibility_flags": ["nodejs_compat"],
@@ -10,26 +10,26 @@
     "run_worker_first": ["/", "/healthz", "/mcp", "/ops", "/ops/*", "/webhooks/whatsapp", "/kb*", "/requests*", "/workspace-theme.css", "/portal/*", "/voice", "/demo/voice", "/agents/*"]
   },
   "vars": {
-    "MORROW_VOICE_DEMO_ENABLED": "0"
+    "ABLE_VOICE_DEMO_ENABLED": "0"
   },
   "durable_objects": {
     "bindings": [
       {
-        "name": "MorrowDeskAgent",
-        "class_name": "MorrowDeskAgent"
+        "name": "AbleDeskAgent",
+        "class_name": "AbleDeskAgent"
       }
     ]
   },
   "migrations": [
     {
       "tag": "v1_voice_demo",
-      "new_sqlite_classes": ["MorrowDeskAgent"]
+      "new_sqlite_classes": ["AbleDeskAgent"]
     }
   ],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "morrow-test",
+      "database_name": "able-test",
       "migrations_dir": "migrations"
     }
   ],
@@ -42,7 +42,7 @@
     "producers": [
       {
         "binding": "MEDIA_QUEUE",
-        "queue": "morrow-test-media"
+        "queue": "able-test-media"
       }
     ]
   },

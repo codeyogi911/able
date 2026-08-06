@@ -33,17 +33,17 @@ describe('agent-controlled customer email notifications', () => {
       customer_name: '<script>not markup</script>',
       case_ref: 'EX-42',
       case_subject: 'Group head pressure',
-      case_link: 'https://support.example.test/requests/access#{{morrow_customer_capability}}',
+      case_link: 'https://support.example.test/requests/access#{{able_customer_capability}}',
       recovery_link: 'https://support.example.test/requests/recover?ref=EX-42',
     })
 
     expect(rendered).toMatchObject({
       subject: 'Welcome <script>not markup</script> — EX-42',
-      bodyText: 'Hi <script>not markup</script>, open https://support.example.test/requests/access#{{morrow_customer_capability}}.',
+      bodyText: 'Hi <script>not markup</script>, open https://support.example.test/requests/access#{{able_customer_capability}}.',
     })
     expect(rendered?.bodyHtml).toContain('<h1>Request EX-42</h1>')
     expect(rendered?.bodyHtml).toContain('<strong>&lt;script&gt;not markup&lt;/script&gt;</strong>')
-    expect(rendered?.bodyHtml).toContain('href="https://support.example.test/requests/access#%7B%7Bmorrow_customer_capability%7D%7D"')
+    expect(rendered?.bodyHtml).toContain('href="https://support.example.test/requests/access#%7B%7Bable_customer_capability%7D%7D"')
     expect(rendered?.bodyHtml).not.toContain('<script>')
   })
 
@@ -54,7 +54,7 @@ describe('agent-controlled customer email notifications', () => {
     expect(customization.templates.find((template) => template.notification === 'agent_reply')?.enabled).toBe(false)
     expect(customization.templates.find((template) => template.notification === 'case_received')?.enabled).toBe(true)
     await expect(prepareEmailNotification(env.DB, 'agent_reply', {
-      workspace_name: 'Morrow Desk',
+      workspace_name: 'Able Desk',
       customer_name: 'Inez Almeida',
       case_ref: 'MD-731',
       case_subject: 'Pressure drops',

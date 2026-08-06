@@ -288,7 +288,7 @@ class D1Helpdesk implements HelpdeskImplementation {
     this.attachments = dependencies.attachments
     this.baseUrl = normalizeOrigin(dependencies.baseUrl)
     this.capabilitySecret = dependencies.capabilitySecret
-    this.workspaceName = dependencies.workspaceName?.trim() || 'Morrow Desk'
+    this.workspaceName = dependencies.workspaceName?.trim() || 'Able Desk'
     this.now = dependencies.clock?.now.bind(dependencies.clock) ?? (() => new Date())
     this.uuid = dependencies.random?.uuid.bind(dependencies.random) ?? defaultUuid
     this.token = dependencies.random?.token.bind(dependencies.random) ?? defaultToken
@@ -409,7 +409,7 @@ class D1Helpdesk implements HelpdeskImplementation {
       && validIntelligence?.preview_content_type === 'image/webp'
       && (validIntelligence.preview_size ?? Number.MAX_SAFE_INTEGER) <= 5 * 1024 * 1024
     const previewResourceUri = inlineImageAvailable
-      ? `morrow://attachments/${encodeURIComponent(row.id)}/preview`
+      ? `able://attachments/${encodeURIComponent(row.id)}/preview`
       : null
     const nextActions: Record<MediaKind, string> = {
       image: inlineImageAvailable
@@ -429,7 +429,7 @@ class D1Helpdesk implements HelpdeskImplementation {
         filename: row.filename,
         contentType: row.content_type,
         size: row.size,
-        resourceUri: `morrow://attachments/${encodeURIComponent(row.id)}`,
+        resourceUri: `able://attachments/${encodeURIComponent(row.id)}`,
       },
       media: {
         kind: mediaKind,
@@ -463,7 +463,7 @@ class D1Helpdesk implements HelpdeskImplementation {
       throw new HelpdeskError('resource_not_found', 'Resource not found', 404)
     }
     const id = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''))
-    if (parsed.protocol !== 'morrow:' || !id) throw new HelpdeskError('resource_not_found', 'Resource not found', 404)
+    if (parsed.protocol !== 'able:' || !id) throw new HelpdeskError('resource_not_found', 'Resource not found', 404)
     if (parsed.hostname === 'attachments') {
       const path = parsed.pathname.replace(/^\/+/, '').split('/').map((part) => decodeURIComponent(part))
       const attachmentId = path[0]
@@ -512,7 +512,7 @@ class D1Helpdesk implements HelpdeskImplementation {
       throw new HelpdeskError('resource_not_found', 'Resource not found', 404)
     }
     const id = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''))
-    if (parsed.protocol !== 'morrow:' || parsed.hostname !== 'attachments' || !id) {
+    if (parsed.protocol !== 'able:' || parsed.hostname !== 'attachments' || !id) {
       throw new HelpdeskError('resource_not_found', 'Resource not found', 404)
     }
     const owner = await this.caseForCapability(capability.token)
@@ -627,7 +627,7 @@ class D1Helpdesk implements HelpdeskImplementation {
         filename: attachment.filename,
         contentType: attachment.content_type,
         size: attachment.size,
-        resourceUri: `morrow://attachments/${encodeURIComponent(attachment.id)}`,
+        resourceUri: `able://attachments/${encodeURIComponent(attachment.id)}`,
       })
     }
     const thread: ThreadEntry[] = messages
@@ -688,7 +688,7 @@ class D1Helpdesk implements HelpdeskImplementation {
       slug: article.slug,
       title: article.title,
       excerpt: article.excerpt || article.body_markdown.replace(/[#*_`>\[\]()]/g, '').trim().slice(0, 180),
-      resourceUri: `morrow://articles/${encodeURIComponent(article.slug)}`,
+      resourceUri: `able://articles/${encodeURIComponent(article.slug)}`,
     }))
   }
 
@@ -806,7 +806,7 @@ class D1Helpdesk implements HelpdeskImplementation {
         slug: article.slug,
         title: article.title,
         excerpt: article.excerpt || article.body_markdown.replace(/[#*_`>\[\]()]/g, '').trim().slice(0, 180),
-        resourceUri: `morrow://articles/${encodeURIComponent(article.slug)}`,
+        resourceUri: `able://articles/${encodeURIComponent(article.slug)}`,
         section: { id: article.section_id, name: article.section_name },
         published: article.published === 1,
         revision: article.revision,

@@ -1,4 +1,4 @@
-# Morrow roadmap
+# Able roadmap
 
 - Status: living document
 - Last reviewed: 2026-08-01
@@ -15,7 +15,7 @@ The V1 foundation includes a Desk + CRM tracer over the shared substrate, MCP-fi
 ## Now — a launch-ready customer experience
 
 1. **Chat-first assistant, capabilities one at a time.** Grounded article answers with links, order lookup by the order-number/email pair, and ticket creation are shipped behind live evals. Text help starts anonymous and asks for email only at an identity-bearing action. Ticket status remains next only after real mailbox verification is activated for that read. Each addition extends `eval:voice` before it ships.
-2. **Knowledge content pipeline.** Starter sections and articles authored per deployment through `morrow_article_put`, suggested-article quality on intake, and a portal that stays presentable while the base is still empty. The repository ships structure, never tenant content.
+2. **Knowledge content pipeline.** Starter sections and articles authored per deployment through `able_article_put`, suggested-article quality on intake, and a portal that stays presentable while the base is still empty. The repository ships structure, never tenant content.
 3. **Search retrieval depth.** Tokenized, stop-word-aware ranking now weights article title, excerpt, and body for both portal results and assistant grounding. Move to an indexed implementation such as D1 FTS5 only when corpus size or measured latency justifies it, while preserving the no-JS portal fallback and strict CSP.
 4. **Proving-ground discipline.** Deploy exact public commits through a protected environment, keep tenant evidence outside the repository, and return sanitized findings as generic upstream issues and tests. Follow [the development workflow](development.md).
 

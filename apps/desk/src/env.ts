@@ -11,17 +11,17 @@ export type Env = Cloudflare.Env & {
   /** Durable handoff from intake to attachment intelligence processing. */
   MEDIA_QUEUE: Queue<{ kind: 'process_media' }>
   /** Explicit kill switch for verified browser voice support. */
-  MORROW_VOICE_DEMO_ENABLED?: string
+  ABLE_VOICE_DEMO_ENABLED?: string
   /** Bare Access-protected hostname carrying both /mcp and /ops. */
-  MORROW_OPERATOR_HOSTNAME?: string
+  ABLE_OPERATOR_HOSTNAME?: string
   /** Access application audience. MCP and /ops fail closed when absent. */
   CF_ACCESS_AUD?: string
   /** Optional issuer pin, for example team.cloudflareaccess.com. */
   CF_ACCESS_TEAM_DOMAIN?: string
   /** First verified identity promoted to admin when no operator exists. */
-  MORROW_OWNER_EMAIL?: string
+  ABLE_OWNER_EMAIL?: string
   /** Localhost-only identity for development and Worker tests. */
-  MORROW_DEV_EMAIL?: string
+  ABLE_DEV_EMAIL?: string
   /** Turnstile secret. Public writes fail closed in production when absent. */
   TURNSTILE_SECRET_KEY?: string
   /** Public Turnstile site key supplied through deployment configuration. */

@@ -2,7 +2,7 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE workspace_settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  display_name TEXT NOT NULL DEFAULT 'Morrow Desk',
+  display_name TEXT NOT NULL DEFAULT 'Able Desk',
   portal_title TEXT NOT NULL DEFAULT 'How can we help?',
   logo_url TEXT,
   home_url TEXT,

@@ -37,7 +37,7 @@ export async function loadOpsDiagnostics(env: Env): Promise<OpsDiagnostics> {
   )
   return {
     setup: {
-      accessReady: Boolean(normalizeOperatorHostname(env.MORROW_OPERATOR_HOSTNAME) && env.CF_ACCESS_AUD && env.CF_ACCESS_TEAM_DOMAIN),
+      accessReady: Boolean(normalizeOperatorHostname(env.ABLE_OPERATOR_HOSTNAME) && env.CF_ACCESS_AUD && env.CF_ACCESS_TEAM_DOMAIN),
       securityReady: Boolean(
         env.TURNSTILE_SECRET_KEY
         && env.TURNSTILE_SITE_KEY
@@ -75,7 +75,7 @@ export async function updateOperatorRole(
     `SELECT id, email, role, active FROM operators WHERE id = ?`,
   ).bind(operatorId).first<{ id: string; email: string; role: 'admin' | 'agent'; active: number }>()
   if (!operator || operator.active !== 1) throw new Error('Active operator not found')
-  if (env.MORROW_OWNER_EMAIL && operator.email.toLowerCase() === env.MORROW_OWNER_EMAIL.trim().toLowerCase() && role !== 'admin') {
+  if (env.ABLE_OWNER_EMAIL && operator.email.toLowerCase() === env.ABLE_OWNER_EMAIL.trim().toLowerCase() && role !== 'admin') {
     throw new Error('The configured owner must remain an administrator')
   }
   if (operator.role === 'admin' && role === 'agent') {
