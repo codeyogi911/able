@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { createProductionConfig } from '../scripts/production-config.mjs'
 
 const source = {
+  name: 'able',
   d1_databases: [{ binding: 'DB', database_name: 'able', migrations_dir: 'migrations' }],
   r2_buckets: [{ binding: 'ATTACHMENTS' }],
   queues: {
@@ -37,5 +38,21 @@ describe('production Wrangler configuration', () => {
       .toThrow('ABLE_D1_DATABASE_ID is missing or invalid')
     expect(() => createProductionConfig(source, { ...variables, ABLE_R2_BUCKET_NAME: '../bucket' }))
       .toThrow('ABLE_R2_BUCKET_NAME is missing or invalid')
+  })
+
+  it('keeps the committed Worker name unless a deployment supplies its own', () => {
+    // A Worker cannot be renamed in place, so a deployment already serving
+    // custom domains from an older Worker name must be able to keep it.
+    expect(createProductionConfig(source, variables).name).toBe('able')
+    expect(createProductionConfig(source, { ...variables, ABLE_WORKER_NAME: 'abledesk' }).name).toBe('abledesk')
+    expect(createProductionConfig(source, { ...variables, ABLE_WORKER_NAME: '   ' }).name).toBe('able')
+    expect(source.name).toBe('able')
+  })
+
+  it('rejects a Worker name Cloudflare would not accept', () => {
+    for (const name of ['Not Valid', 'trailing-', '-leading', 'has_underscore', 'a'.repeat(64)]) {
+      expect(() => createProductionConfig(source, { ...variables, ABLE_WORKER_NAME: name }))
+        .toThrow('ABLE_WORKER_NAME is invalid')
+    }
   })
 })

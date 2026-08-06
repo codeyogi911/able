@@ -41,7 +41,8 @@ Keep deployment-specific resource coordinates in private Workers Builds variable
 - `ABLE_D1_DATABASE_ID`: the production D1 database UUID;
 - `ABLE_D1_DATABASE_NAME`: the production D1 database name;
 - `ABLE_R2_BUCKET_NAME`: the production attachment bucket;
-- `ABLE_MEDIA_QUEUE_NAME`: the production attachment-analysis queue.
+- `ABLE_MEDIA_QUEUE_NAME`: the production attachment-analysis queue;
+- `ABLE_WORKER_NAME`: optional; the Worker to deploy onto when it is not the committed default. A Worker cannot be renamed in place, so a deployment whose Worker predates a rename can keep serving from it instead of moving its custom domains, Access application and email routing to a differently named Worker. The Worker name is not customer-visible when custom domains front it.
 
 `npm run deploy:production` validates these values and creates an ignored, ephemeral Wrangler file for the build. It never writes the production coordinates into the public repository.
 

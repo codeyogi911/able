@@ -19,6 +19,20 @@ export function createProductionConfig(source, env) {
   const queueName = required(env, 'ABLE_MEDIA_QUEUE_NAME', /^[a-z0-9][a-z0-9_-]{1,62}$/)
   const config = structuredClone(source)
 
+  // A deployment may run on a Worker whose name predates this one, and the
+  // Worker name is not customer-visible when custom domains front it. Renaming
+  // a Worker in place is not possible, so allow the name to be supplied like
+  // every other deployment identifier rather than moving domains, Access
+  // policy and email routing to a differently named Worker. Optional: the
+  // committed name is the default.
+  const workerName = env.ABLE_WORKER_NAME?.trim()
+  if (workerName) {
+    // A Worker name becomes a DNS label, so it may not start or end with a
+    // hyphen, and is limited to 63 characters.
+    if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(workerName)) throw new Error('ABLE_WORKER_NAME is invalid')
+    config.name = workerName
+  }
+
   const database = config.d1_databases?.find((binding) => binding.binding === 'DB')
   const bucket = config.r2_buckets?.find((binding) => binding.binding === 'ATTACHMENTS')
   const producer = config.queues?.producers?.find((binding) => binding.binding === 'MEDIA_QUEUE')
