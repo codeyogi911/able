@@ -104,7 +104,7 @@ describe('voice agent WebSocket boundary', () => {
       // A deterministic escalation trigger must never silently drop; without
       // a contact it routes to the in-thread card, not a ticket.
       socket.send(JSON.stringify({ type: 'text_message', text: 'My document scanner is smoking.' }))
-      await expect(cardRequested).resolves.toMatchObject({ type: 'voice_contact_required', anchor: 'after_reply' })
+      await expect(cardRequested).resolves.toMatchObject({ type: 'voice_contact_required', anchor: 'after_reply', reason: 'open_ticket' })
       const reply = await gated
       expect(String(reply.text)).toContain('card below')
 
@@ -145,7 +145,7 @@ describe('voice agent WebSocket boundary', () => {
 
       socket.send(JSON.stringify({ type: 'text_message', text: HUMAN_HELP_MESSAGE }))
 
-      await expect(cardRequested).resolves.toMatchObject({ type: 'voice_contact_required', anchor: 'after_reply' })
+      await expect(cardRequested).resolves.toMatchObject({ type: 'voice_contact_required', anchor: 'after_reply', reason: 'open_ticket' })
       await expect(reply).resolves.toMatchObject({ type: 'transcript_end' })
     } finally {
       socket.close()
@@ -160,7 +160,7 @@ describe('voice agent WebSocket boundary', () => {
       const initialReply = nextMessage(socket, (message) => message.type === 'transcript_end')
       socket.send(JSON.stringify({ type: 'text_message', text: 'Where is my order?' }))
 
-      await expect(cardRequested).resolves.toMatchObject({ anchor: 'after_reply' })
+      await expect(cardRequested).resolves.toMatchObject({ anchor: 'after_reply', reason: 'order_lookup' })
       await expect(initialReply).resolves.toMatchObject({
         text: 'To look up your order, add your name and the email used at checkout in the card below.',
       })

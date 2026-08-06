@@ -157,13 +157,13 @@ describe('shopify adapter', () => {
 describe('deterministic voice order continuation', () => {
   it('recognizes an order-status request and preserves a previously supplied order number', () => {
     expect(isOrderLookupRequest('Where is my order?')).toBe(true)
-    expect(isOrderLookupRequest('Can you track order #FC-4021 for me?')).toBe(true)
-    expect(isOrderLookupRequest('How do I clean my grinder?')).toBe(false)
+    expect(isOrderLookupRequest('Can you track order #SO-4021 for me?')).toBe(true)
+    expect(isOrderLookupRequest('How do I clean my router?')).toBe(false)
     expect(findOrderNumber([
-      { role: 'user', content: 'Where is order #FC-4021?' },
+      { role: 'user', content: 'Where is order #SO-4021?' },
       { role: 'assistant', content: 'Add your email in the card below.' },
       { role: 'user', content: 'I have shared my name and email.' },
-    ])).toBe('#FC-4021')
+    ])).toBe('#SO-4021')
   })
 
   it('renders provider results without asking for contact details again', () => {

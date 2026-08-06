@@ -51,7 +51,7 @@ describe('voice conversation policy', () => {
       'What is the order number from your confirmation email?',
     )
     expect(directVoiceResponse(ORDER_LOOKUP_CONTACT_CONTINUATION, [
-      { role: 'user', content: 'Where is order #FC-4021?' },
+      { role: 'user', content: 'Where is order #SO-4021?' },
       { role: 'assistant', content: 'Add your name and email in the card below.' },
       { role: 'user', content: ORDER_LOOKUP_CONTACT_CONTINUATION },
     ])).toBeNull()

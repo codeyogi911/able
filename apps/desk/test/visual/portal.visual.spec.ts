@@ -147,6 +147,7 @@ async function installVoiceSocketFixture(
   options: {
     holdSessionReady?: boolean
     contactContinuation?: 'order_lookup' | 'open_ticket' | 'product_help'
+    contactReason?: 'order_lookup' | 'open_ticket' | 'product_help'
   } = {},
 ): Promise<VoiceSocketFixture> {
   let socket: WebSocketRoute | null = null
@@ -190,7 +191,7 @@ async function installVoiceSocketFixture(
       send({ type: 'status', status: 'thinking' })
       send({ type: 'transcript', role: 'user', text: parsed.text })
       if (turn === 1 && options.contactContinuation) {
-        send({ type: 'voice_contact_required', anchor: 'after_reply' })
+        send({ type: 'voice_contact_required', anchor: 'after_reply', reason: options.contactReason })
       }
       send({
         type: 'voice_sources',
@@ -264,7 +265,7 @@ test('support home opens with the agent as the primary help experience', async (
   await expect(page.getByRole('search')).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Browse help' })).toHaveAttribute('href', '/kb')
   await expect(page.getByRole('heading', { level: 2, name: 'Browse by topic' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Ask the team' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Contact support' })).toBeEnabled()
 
   const composerPosition = await page.locator('.ask-composer').evaluate((element) => {
     const box = element.getBoundingClientRect()
@@ -283,34 +284,59 @@ test('support home opens with the agent as the primary help experience', async (
 
   const width = viewportWidth(testInfo)
   if (width <= 700) {
-    expect(composerPosition.top).toBeGreaterThan(composerPosition.viewportHeight * .65)
-    expect(composerPosition.bottom).toBeLessThanOrEqual(composerPosition.viewportHeight - 12)
+    expect(composerPosition.top).toBeLessThan(composerPosition.viewportHeight * .65)
+    expect(composerPosition.bottom).toBeLessThan(composerPosition.viewportHeight)
     expect(sendGeometry).toEqual({ width: 44, height: 44, iconOffsetX: 0, iconOffsetY: 0 })
   } else {
     expect(composerPosition.top).toBeLessThan(composerPosition.viewportHeight * .55)
   }
   await expectAcceptanceBasics(page, width)
-  await expectMobileTargets(page, width, '.support-nav a, .topics-heading a, .topic-card a')
+  await expectMobileTargets(page, width, '.support-nav a, .support-task, .topics-heading a, .topic-card a')
   await screenshot(page, 'agent-home.png')
 })
 
 test('contact continuation stays out of the customer transcript', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-390', 'The mobile contact handoff is covered once.')
-  await installVoiceSocketFixture(page, { contactContinuation: 'order_lookup' })
+  await installVoiceSocketFixture(page, { contactContinuation: 'order_lookup', contactReason: 'order_lookup' })
   await page.goto('/', { waitUntil: 'networkidle' })
 
-  await page.getByLabel('Ask anything').fill('Where is my order?')
-  await page.getByRole('button', { name: 'Send question' }).click()
+  await page.getByRole('button', { name: /Track an order/ }).click()
+  await expect(page.getByText('Find your order', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Name')).toBeVisible()
+  await expect(page.getByLabel('Email used at checkout')).toBeVisible()
   await expect(page.getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
 
   await page.getByLabel('Name').fill('Avery Customer')
-  await page.getByLabel('Email').fill('avery@example.test')
-  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByLabel('Email used at checkout').fill('avery@example.test')
+  await page.getByRole('button', { name: 'Continue to order lookup' }).click()
 
-  await expect(page.getByText('We’ll use avery@example.test for this support action')).toBeVisible()
+  await expect(page.getByText('We’ll use avery@example.test only to look up this order')).toBeVisible()
   await expect(page.getByText('Deterministic support answer 2.', { exact: false })).toBeVisible()
   await expect(page.getByText('I have shared my name and email.', { exact: false })).toHaveCount(0)
+})
+
+test('product-help contact copy stays purpose-specific', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'The product-help contact path is covered once.')
+  await installVoiceSocketFixture(page, { contactContinuation: 'product_help', contactReason: 'product_help' })
+  await page.goto('/', { waitUntil: 'networkidle' })
+
+  await page.getByRole('button', { name: /Warranty or repair/ }).click()
+  await expect(page.getByText('Send this to support', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Email for follow-up')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible()
+})
+
+test('contact support asks for the issue before it asks for identity', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'The landing contact path is covered once.')
+  await installVoiceSocketFixture(page)
+  await page.goto('/', { waitUntil: 'networkidle' })
+
+  await page.getByRole('button', { name: 'Contact support' }).click()
+  const input = page.getByLabel('Ask anything')
+  await expect(input).toBeFocused()
+  await expect(input).toHaveAttribute('placeholder', 'Briefly describe what you need help with')
+  await expect(page.getByText('Describe the issue first. Ava will ask for email only if a private request is needed.')).toBeVisible()
+  await expect(page.getByLabel('Conversation with Ava')).toBeHidden()
 })
 
 test('mobile landing remains stable while the agent session becomes ready', async ({ page }, testInfo) => {

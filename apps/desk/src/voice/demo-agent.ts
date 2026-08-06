@@ -228,7 +228,7 @@ export class MorrowDeskAgent extends VoiceAgent<Env> {
             requestId: turnRequestId,
           },
         } satisfies VoiceConnectionState)
-        context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply' }))
+        context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply', reason: 'open_ticket' }))
         return 'This needs a person from the team to review it. Add your email in the card below and I will open a ticket for you right away.'
       }
       try {
@@ -251,7 +251,7 @@ export class MorrowDeskAgent extends VoiceAgent<Env> {
         ...state,
         pendingContactReason: 'order_lookup',
       } satisfies VoiceConnectionState)
-      context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply' }))
+      context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply', reason: 'order_lookup' }))
       return 'To look up your order, add your name and the email used at checkout in the card below.'
     }
 
@@ -367,7 +367,7 @@ export class MorrowDeskAgent extends VoiceAgent<Env> {
                 ...connectionState(context.connection),
                 pendingContactReason: continuationReason,
               } satisfies VoiceConnectionState)
-              context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply' }))
+              context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply', reason: continuationReason }))
               return reason === 'product_help'
                   ? {
                     status: 'requested',

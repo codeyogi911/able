@@ -9,7 +9,9 @@ export const ESCALATION_CATEGORIES = [
 
 export type EscalationCategory = typeof ESCALATION_CATEGORIES[number]
 
-export const HUMAN_HELP_MESSAGE = 'Please let me speak to a real person.'
+// This is customer-visible in the transcript, so it must describe the real
+// outcome: a private email-support request, not a live transfer.
+export const HUMAN_HELP_MESSAGE = 'I want to open a support request for email follow-up.'
 
 const TICKET_STATUS_INTENT = /\b(?:status|update|progress|where\s+(?:is|are)|what(?:'s|\s+is)\s+happening)\b/i
 const TICKET_STATUS_STATE = /\b(?:has|have|did|is|are|was|were)\b.{0,50}\b(?:process(?:ed)?|approv(?:ed)?|complet(?:e|ed)|resolv(?:e|ed)|clos(?:e|ed)|ship(?:ped)?|sent|updated)\b/i
@@ -29,7 +31,7 @@ const CATEGORY_LABELS: Record<EscalationCategory, string> = {
 }
 
 const ESCALATION_RULES: Array<{ category: EscalationCategory; pattern: RegExp }> = [
-  { category: 'explicit_human_request', pattern: /\b(human|real person|live agent|representative|supervisor|manager|someone on (?:the )?phone)\b/i },
+  { category: 'explicit_human_request', pattern: /\b(human|real person|live agent|representative|supervisor|manager|someone on (?:the )?phone|support request for email follow-up)\b/i },
   { category: 'safety_risk', pattern: /\b(smok(?:e|ing)|fire|burning|spark(?:s|ing)?|electric shock|injur(?:y|ed)|unsafe|gas leak|medical emergency)\b/i },
   { category: 'account_security', pattern: /\b(hack(?:ed|ing)?|unauthori[sz]ed|fraud|stolen (?:account|card)|someone (?:else )?(?:accessed|logged)|account takeover|security breach)\b/i },
   { category: 'payment_or_refund', pattern: /\b(refund|charged twice|double charg(?:e|ed)|wrong charge|payment dispute|chargeback|billing error)\b/i },
