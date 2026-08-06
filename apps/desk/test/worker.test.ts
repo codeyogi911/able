@@ -225,8 +225,8 @@ describe('Able Desk Worker boundary', () => {
 
     expect(first.status).toBe(201)
     expect(replay.status).toBe(201)
-    expect(firstHtml).toContain('MD-1')
-    expect(replayHtml).toContain('MD-1')
+    expect(firstHtml).toContain('AD-1')
+    expect(replayHtml).toContain('AD-1')
     expect(firstHtml).not.toContain('able_customer_capability')
     expect(replayHtml).not.toContain('able_customer_capability')
     expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM cases').first()).toEqual({ count: 1 })
@@ -252,12 +252,12 @@ describe('Able Desk Worker boundary', () => {
     intakeForm.set('body', 'The display goes blank after one minute of warm-up.')
     const intake = await SELF.fetch('http://localhost/requests', { method: 'POST', body: intakeForm })
     expect(intake.status).toBe(201)
-    expect(await intake.text()).toContain('MD-1')
+    expect(await intake.text()).toContain('AD-1')
 
     const next = toolPayload(await rpc('next', 'able_case_next'))
     expect(next).toMatchObject({
       kind: 'case',
-      ref: 'MD-1',
+      ref: 'AD-1',
       subject: 'Machine stops during warm-up',
       status: 'open',
       priority: 'normal',
@@ -283,7 +283,7 @@ describe('Able Desk Worker boundary', () => {
       replayed: false,
       delivery: 'queued',
       case: {
-        ref: 'MD-1',
+        ref: 'AD-1',
         status: 'waiting_on_customer',
         assignee: { email: 'owner@example.com' },
       },
@@ -371,7 +371,7 @@ describe('Able Desk Worker boundary', () => {
     expect(customerReply.status).toBe(202)
     expect(await customerReply.text()).toContain('Your message is in the conversation.')
 
-    const reopened = toolPayload(await rpc('reopened', 'able_case_get', { ref: 'MD-1' }))
+    const reopened = toolPayload(await rpc('reopened', 'able_case_get', { ref: 'AD-1' }))
     expect(reopened).toMatchObject({ status: 'open' })
     expect(reopened.thread.at(-1)).toMatchObject({
       visibility: 'public',
@@ -399,7 +399,7 @@ describe('Able Desk Worker boundary', () => {
       revision: finalReply.case.revision,
       status: 'resolved',
     }))
-    expect(resolved.case).toMatchObject({ ref: 'MD-1', status: 'resolved' })
+    expect(resolved.case).toMatchObject({ ref: 'AD-1', status: 'resolved' })
 
     const finalCustomerView = await SELF.fetch('http://localhost/requests/case', {
       headers: { cookie: customerCookie! },
@@ -409,9 +409,9 @@ describe('Able Desk Worker boundary', () => {
     expect(finalCustomerHtml).toContain('We have enough detail to arrange the next service step.')
     expect(finalCustomerHtml).not.toContain('persistent pressure loss now needs service follow-up')
 
-    const finalSearch = toolPayload(await rpc('final-search', 'able_case_search', { query: 'MD-1' }))
+    const finalSearch = toolPayload(await rpc('final-search', 'able_case_search', { query: 'AD-1' }))
     expect(finalSearch.cases).toEqual([
-      expect.objectContaining({ ref: 'MD-1', status: 'resolved' }),
+      expect.objectContaining({ ref: 'AD-1', status: 'resolved' }),
     ])
   })
 

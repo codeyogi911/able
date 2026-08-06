@@ -253,7 +253,7 @@ describe('voice demo boundary', () => {
   })
 
   it('routes serious-category ticket status questions to status lookup instead of opening duplicates', () => {
-    expect(isTicketStatusRequest('What is the status of my refund ticket MD-123?')).toBe(true)
+    expect(isTicketStatusRequest('What is the status of my refund ticket AD-123?')).toBe(true)
     expect(isTicketStatusRequest('Has my refund been processed?')).toBe(true)
     expect(isTicketStatusRequest('I need a refund because I was charged twice.')).toBe(false)
     expect(classifyEscalation('Any update on my ticket? The machine is now smoking.')).toBe('safety_risk')

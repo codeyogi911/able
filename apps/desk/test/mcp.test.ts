@@ -46,7 +46,7 @@ const agent: Actor = {
 
 const workspace: CaseWorkspace = {
   kind: 'case',
-  ref: 'MD-42' as CaseRef,
+  ref: 'AD-42' as CaseRef,
   revision: 'revision-7' as CaseRevision,
   subject: 'The machine stops during warm-up',
   status: 'open',
@@ -569,9 +569,9 @@ describe('Able Desk stateless MCP contract', () => {
         'ui/resourceUri': 'ui://able/workspace.html',
       })
     }
-    expect((await call('workspace', 'able_customer_workspace', { ref: 'MD-42' })).result.isError).toBe(false)
+    expect((await call('workspace', 'able_customer_workspace', { ref: 'AD-42' })).result.isError).toBe(false)
     expect((await call('adopt', 'able_party_adopt', {
-      ref: 'MD-42',
+      ref: 'AD-42',
       revision: 'revision-7',
       intent_id: 'intent-adopt-42',
     })).result.isError).toBe(false)
@@ -588,7 +588,7 @@ describe('Able Desk stateless MCP contract', () => {
       activity_kind: 'support',
       summary: 'Resolved the support question.',
       occurred_at: '2026-07-18T13:00:00.000Z',
-      source_case_ref: 'MD-42',
+      source_case_ref: 'AD-42',
     })).result.isError).toBe(false)
     expect((await call('followup', 'able_crm_followup', {
       party_id: 'party-42',
@@ -600,8 +600,8 @@ describe('Able Desk stateless MCP contract', () => {
     })).result.isError).toBe(false)
 
     expect(workspaceCalls).toEqual([
-      { kind: 'load', value: 'MD-42' },
-      { kind: 'adopt', value: { ref: 'MD-42', revision: 'revision-7', intentId: 'intent-adopt-42' } },
+      { kind: 'load', value: 'AD-42' },
+      { kind: 'adopt', value: { ref: 'AD-42', revision: 'revision-7', intentId: 'intent-adopt-42' } },
     ])
     expect(crmCalls).toEqual([
       { kind: 'sales_lead_read', selector: { kind: 'next' } },
@@ -615,7 +615,7 @@ describe('Able Desk stateless MCP contract', () => {
         activityKind: 'support',
         summary: 'Resolved the support question.',
         occurredAt: '2026-07-18T13:00:00.000Z',
-        source: { module: 'helpdesk', entityType: 'case', entityId: 'MD-42' },
+        source: { module: 'helpdesk', entityType: 'case', entityId: 'AD-42' },
       },
       {
         kind: 'schedule_followup',
@@ -1139,7 +1139,7 @@ describe('Able Desk stateless MCP contract', () => {
     )
 
     const nextPayload = JSON.parse(nextMessage.result.content[0].text)
-    expect(nextPayload).toMatchObject({ ref: 'MD-42', revision: 'revision-7', subject: workspace.subject })
+    expect(nextPayload).toMatchObject({ ref: 'AD-42', revision: 'revision-7', subject: workspace.subject })
     expect(nextMessage.result.structuredContent).toEqual(nextPayload)
     expect(JSON.stringify(nextPayload)).not.toContain('must-not-leave-the-server')
     expect(JSON.stringify(nextMessage.result.structuredContent)).not.toContain('must-not-leave-the-server')
@@ -1152,7 +1152,7 @@ describe('Able Desk stateless MCP contract', () => {
         method: 'tools/call',
         params: {
           name: 'able_case_reply',
-          arguments: { ref: 'MD-42', revision: 'revision-7', body: 'Please try the startup checklist.' },
+          arguments: { ref: 'AD-42', revision: 'revision-7', body: 'Please try the startup checklist.' },
         },
       }),
     )
@@ -1162,7 +1162,7 @@ describe('Able Desk stateless MCP contract', () => {
         actor: agent,
         command: {
           kind: 'reply',
-          ref: 'MD-42',
+          ref: 'AD-42',
           revision: 'revision-7',
           body: 'Please try the startup checklist.',
         },
@@ -1187,7 +1187,7 @@ describe('Able Desk stateless MCP contract', () => {
         method: 'tools/call',
         params: {
           name: 'able_case_get',
-          arguments: { ref: 'MD-42' },
+          arguments: { ref: 'AD-42' },
           _meta: { progressToken: 'progress-1', 'example.dev/client': 'codex' },
         },
       }),
@@ -1195,8 +1195,8 @@ describe('Able Desk stateless MCP contract', () => {
 
     expect(message.error).toBeUndefined()
     expect(message.result.isError).toBe(false)
-    expect(JSON.parse(message.result.content[0].text)).toMatchObject({ ref: 'MD-42' })
-    expect(helpdesk.workCalls).toEqual([{ actor: agent, selector: { kind: 'case', ref: 'MD-42' } }])
+    expect(JSON.parse(message.result.content[0].text)).toMatchObject({ ref: 'AD-42' })
+    expect(helpdesk.workCalls).toEqual([{ actor: agent, selector: { kind: 'case', ref: 'AD-42' } }])
   })
 
   it('adds an Access-protected browser URL to case and attachment evidence cards', async () => {
@@ -1212,7 +1212,7 @@ describe('Able Desk stateless MCP contract', () => {
       jsonrpc: '2.0',
       id: 'case-browser-url',
       method: 'tools/call',
-      params: { name: 'able_case', arguments: { ref: 'MD-42' } },
+      params: { name: 'able_case', arguments: { ref: 'AD-42' } },
     }))
     const attachmentMessage = await rpcJson(await rpcRequest(handler, {
       jsonrpc: '2.0',
@@ -1221,7 +1221,7 @@ describe('Able Desk stateless MCP contract', () => {
       params: { name: 'able_attachment_inspect', arguments: { attachment_id: 'att_image' } },
     }))
 
-    const expected = 'https://operators.example.test/ops/cases/MD-42'
+    const expected = 'https://operators.example.test/ops/cases/AD-42'
     expect(caseMessage.result.structuredContent.operatorCaseUrl).toBe(expected)
     expect(JSON.parse(caseMessage.result.content[0].text).operatorCaseUrl).toBe(expected)
     expect(attachmentMessage.result.structuredContent.operatorCaseUrl).toBe(expected)
@@ -1244,7 +1244,7 @@ describe('Able Desk stateless MCP contract', () => {
     expect(summary.result.content).toHaveLength(1)
     expect(summary.result.structuredContent).toMatchObject({
       kind: 'attachment_inspection',
-      caseRef: 'MD-42',
+      caseRef: 'AD-42',
       detail: 'summary',
       trust: 'untrusted_customer_content',
       analysis: { status: 'ready', truncated: true },
@@ -1313,7 +1313,7 @@ describe('Able Desk stateless MCP contract', () => {
         params: {
           name: 'able_case_update',
           arguments: {
-            ref: 'MD-42',
+            ref: 'AD-42',
             revision: 'revision-7',
             customer_name: 'Alex Morgan',
             customer_email: 'ALEX.MORGAN@EXAMPLE.NET',
@@ -1328,7 +1328,7 @@ describe('Able Desk stateless MCP contract', () => {
       actor: agent,
       command: {
         kind: 'manage',
-        ref: 'MD-42',
+        ref: 'AD-42',
         revision: 'revision-7',
         customer: {
           name: 'Alex Morgan',
@@ -1351,7 +1351,7 @@ describe('Able Desk stateless MCP contract', () => {
         params: {
           name: 'able_case_reply',
           arguments: {
-            ref: 'MD-42',
+            ref: 'AD-42',
             revision: 'revision-7',
             body: 'Unsafe identity override attempt.',
             actor: { email: 'attacker@example.net', role: 'admin' },

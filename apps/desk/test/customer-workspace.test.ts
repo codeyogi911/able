@@ -14,7 +14,7 @@ const owner: Actor = {
 
 const deskCase: CaseWorkspace = {
   kind: 'case',
-  ref: 'MD-42' as CaseRef,
+  ref: 'AD-42' as CaseRef,
   revision: 'case-revision-7' as CaseRevision,
   subject: 'Machine stops during warm-up',
   status: 'open',

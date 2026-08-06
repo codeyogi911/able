@@ -3,8 +3,8 @@ import { MCP_APP_HTML } from '../../src/adapters/mcp/app.generated'
 
 const caseWorkspace = {
   kind: 'case',
-  ref: 'MD-731',
-  operatorCaseUrl: 'https://operators.example.test/ops/cases/MD-731',
+  ref: 'AD-731',
+  operatorCaseUrl: 'https://operators.example.test/ops/cases/AD-731',
   revision: 'rev_visual_case',
   subject: 'Label printer loses pressure after warm-up',
   status: 'open',
@@ -97,7 +97,7 @@ test('renders a responsive, safe case workspace card', async ({ page }, testInfo
   const app = await mountApp(page, caseWorkspace)
 
   await expect(app.getByRole('heading', { level: 1 })).toHaveText(caseWorkspace.subject)
-  await expect(app.getByText('MD-731', { exact: true })).toBeVisible()
+  await expect(app.getByText('AD-731', { exact: true })).toBeVisible()
   await expect(app.getByRole('heading', { name: 'Conversation' })).toBeVisible()
   await expect(app.getByText('Safe startup checklist')).toBeVisible()
   await expect(app.getByRole('button', { name: 'Open full ticket' })).toBeVisible()
@@ -168,7 +168,7 @@ test('renders bounded attachment evidence as an untrusted visual card', async ({
   const app = await mountApp(page, {
     schemaVersion: 'attachment-inspection.v1',
     kind: 'attachment_inspection',
-    caseRef: 'MD-731',
+    caseRef: 'AD-731',
     attachment: {
       id: 'attachment-photo',
       filename: 'group-head-leak.heic',

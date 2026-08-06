@@ -56,11 +56,11 @@ describe('agent-controlled customer email notifications', () => {
     await expect(prepareEmailNotification(env.DB, 'agent_reply', {
       workspace_name: 'Able Desk',
       customer_name: 'Inez Almeida',
-      case_ref: 'MD-731',
+      case_ref: 'AD-731',
       case_subject: 'Pressure drops',
       message_body: 'Please check the tank.',
       case_link: 'https://support.example.test/requests/access#token',
-      recovery_link: 'https://support.example.test/requests/recover?ref=MD-731',
+      recovery_link: 'https://support.example.test/requests/recover?ref=AD-731',
     })).resolves.toBeNull()
   })
 

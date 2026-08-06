@@ -29,7 +29,7 @@ const settings: WorkspaceSettingsView = {
   homeUrl: null,
   outboundSender: 'support@example.test',
   portalBaseUrl: 'https://support.example.test',
-  casePrefix: 'MD',
+  casePrefix: 'AD',
   locale: 'en',
   timezone: 'UTC',
   accentColor: '#c75936',
@@ -49,7 +49,7 @@ const operator: Actor = {
 
 const workspace: CaseWorkspace = {
   kind: 'case',
-  ref: 'MD-42' as CaseRef,
+  ref: 'AD-42' as CaseRef,
   revision: 'rev-7' as CaseRevision,
   subject: 'Shipment arrived with a cracked handle',
   status: 'open',
@@ -101,7 +101,7 @@ function mockHelpdesk(overrides: Partial<Helpdesk> = {}): Helpdesk {
       delivery: 'queued',
     })),
     intake: vi.fn(async () => ({
-      caseRef: 'MD-42' as CaseRef,
+      caseRef: 'AD-42' as CaseRef,
       created: true,
       publicUrl: 'https://support.example.test/requests/access#private-capability',
       delivery: 'queued',
@@ -279,7 +279,7 @@ describe('customer portal', () => {
       expect.objectContaining({ subject: 'Cracked handle', email: 'rhea@example.test' }),
     )
     const html = await response.text()
-    expect(html).toContain('MD-42')
+    expect(html).toContain('AD-42')
     expect(html).not.toContain('private-capability')
   })
 
@@ -298,12 +298,12 @@ describe('customer portal', () => {
 
   it('prefills the case reference when an email recovery link opens the recovery form', async () => {
     const { root } = portal(mockHelpdesk())
-    const response = await root.request('https://support.example.test/requests/recover?ref=md-731')
+    const response = await root.request('https://support.example.test/requests/recover?ref=ad-731')
     const html = await response.text()
 
     expect(response.status).toBe(200)
     expect(html).toContain('name="ref"')
-    expect(html).toContain('value="MD-731"')
+    expect(html).toContain('value="AD-731"')
   })
 
   it('blocks recovery when the recovery notification is disabled', async () => {
@@ -332,7 +332,7 @@ describe('customer portal', () => {
       body: new URLSearchParams({
         request_id: 'recover-1',
         email: 'private.person@example.test',
-        ref: 'MD-9999',
+        ref: 'AD-9999',
       }),
     })
     const html = await response.text()
@@ -340,7 +340,7 @@ describe('customer portal', () => {
     expect(response.status).toBe(202)
     expect(html).toContain('If those details match')
     expect(html).not.toContain('private.person@example.test')
-    expect(html).not.toContain('MD-9999')
+    expect(html).not.toContain('AD-9999')
   })
 
   it('exchanges a fragment-carried capability for a locked cookie before showing the thread', async () => {
@@ -624,7 +624,7 @@ describe('operator recovery console', () => {
       diagnostics: vi.fn(async () => diagnostics),
       verifyOperatorWrite: vi.fn(async () => true),
     }))
-    const response = await root.request('https://support.example.test/ops/cases/MD-42/reply', {
+    const response = await root.request('https://support.example.test/ops/cases/AD-42/reply', {
       method: 'POST',
       headers: { origin: 'https://support.example.test' },
       body: new URLSearchParams({ revision: 'rev-7', body: 'We are sending a replacement today.' }),
@@ -633,11 +633,11 @@ describe('operator recovery console', () => {
     expect(response.status).toBe(303)
     expect(helpdesk.act).toHaveBeenCalledWith(operator, {
       kind: 'reply',
-      ref: 'MD-42',
+      ref: 'AD-42',
       revision: 'rev-7',
       body: 'We are sending a replacement today.',
     })
-    expect(response.headers.get('location')).toContain('/ops/cases/MD-42')
+    expect(response.headers.get('location')).toContain('/ops/cases/AD-42')
   })
 
   it('plays a customer video inline from the protected case view', async () => {
@@ -673,7 +673,7 @@ describe('operator recovery console', () => {
       verifyOperatorWrite: vi.fn(async () => true),
     }))
 
-    const page = await root.request('https://operators.example.test/ops/cases/MD-42')
+    const page = await root.request('https://operators.example.test/ops/cases/AD-42')
     const html = await page.text()
     const video = await root.request('https://operators.example.test/ops/video?uri=able%3A%2F%2Fattachments%2Fattachment-video')
 

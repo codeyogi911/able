@@ -8,7 +8,7 @@ CREATE TABLE workspace_settings (
   home_url TEXT,
   support_email TEXT,
   outbound_sender TEXT,
-  case_prefix TEXT NOT NULL DEFAULT 'MD' CHECK (length(case_prefix) BETWEEN 2 AND 8),
+  case_prefix TEXT NOT NULL DEFAULT 'AD' CHECK (length(case_prefix) BETWEEN 2 AND 8),
   locale TEXT NOT NULL DEFAULT 'en',
   timezone TEXT NOT NULL DEFAULT 'UTC',
   support_hours_json TEXT NOT NULL DEFAULT '{}',

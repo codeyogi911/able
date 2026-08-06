@@ -147,7 +147,7 @@ describe('Helpdesk', () => {
       },
     )
 
-    expect(received.caseRef).toBe('MD-1')
+    expect(received.caseRef).toBe('AD-1')
     expect(received.delivery).toBe('queued')
     expect(received.created).toBe(true)
     expect(new URL(received.publicUrl).origin).toBe('https://support.example.com')
@@ -156,7 +156,7 @@ describe('Helpdesk', () => {
 
     const next = asCase(await desk.work(owner, { kind: 'next' }))
     expect(next).toMatchObject({
-      ref: 'MD-1',
+      ref: 'AD-1',
       subject: 'The machine stops after a few seconds',
       status: 'open',
       priority: 'normal',

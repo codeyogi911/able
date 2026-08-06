@@ -114,7 +114,7 @@ describe('inbound email channel', () => {
     }>()
 
     expect(row).toMatchObject({
-      ref: 'MD-1',
+      ref: 'AD-1',
       channel: 'email',
       status: 'open',
       body_text: 'The display turns off after about one minute.',
@@ -129,7 +129,7 @@ describe('inbound email channel', () => {
   })
 
   it.each([
-    { name: 'Able Desk reference', marker: 'MD-1', legacy: false },
+    { name: 'Able Desk reference', marker: 'AD-1', legacy: false },
     { name: 'generic legacy alias', marker: 'LEG-902', legacy: true },
   ])('threads a reply by $name and deduplicates the Message-ID', async ({ marker, legacy }) => {
     await receive(emailFixture({
@@ -234,7 +234,7 @@ describe('inbound email channel', () => {
       body: 'This reply must carry the canonical case marker.',
     })
     const emitted = await env.DB.prepare("SELECT subject FROM outbox_rows WHERE kind = 'public_reply'").first<{ subject: string }>()
-    expect(emitted?.subject).toMatch(/\[MD-1\]/)
+    expect(emitted?.subject).toMatch(/\[AD-1\]/)
 
     const customerReply = await receive(emailFixture({
       subject: emitted!.subject,
@@ -281,7 +281,7 @@ describe('inbound email channel', () => {
        JOIN stored_files ON stored_files.id = case_attachments.file_id`,
     ).first<{ ref: string; body_text: string; filename: string }>()
     expect(attachment).toEqual({
-      ref: 'MD-1',
+      ref: 'AD-1',
       body_text: 'This is the issue in the attached video.',
       filename: 'machine-steam.mp4',
     })
@@ -420,7 +420,7 @@ describe('durable outbound email', () => {
     expect(delivered.text).not.toContain('{{able_customer_capability}}')
     expect(delivered.html).not.toContain('%7B%7Bable_customer_capability%7D%7D')
     expect(delivered.html).not.toContain('%7B%7Bcase_ref%7D%7D')
-    expect(delivered.html).toContain('https://support.example.test/requests/recover?ref=MD-1')
+    expect(delivered.html).toContain('https://support.example.test/requests/recover?ref=AD-1')
     const link = /https:\/\/support\.example\.test\/requests\/access#([A-Za-z0-9_-]{32,})/.exec(delivered.text)
     expect(link).not.toBeNull()
     const capability = link![1]!

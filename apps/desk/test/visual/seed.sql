@@ -112,7 +112,7 @@ INSERT INTO cases
   (id, public_id, ref, subject, customer_id, status, priority, channel, category_id, assignee_id, revision, version,
    customer_capability_nonce, customer_capability_hash, opened_at, updated_at)
 VALUES
-  (204, 'case-visual-204', 'MD-204', 'Desktop app stops during report export', 'customer-visual-inez', 'waiting_on_customer', 'high', 'portal', 'technical', 'operator-visual-owner', 'rev-case-visual-3', 3,
+  (204, 'case-visual-204', 'AD-204', 'Desktop app stops during report export', 'customer-visual-inez', 'waiting_on_customer', 'high', 'portal', 'technical', 'operator-visual-owner', 'rev-case-visual-3', 3,
    'nonce-visual-204', '544b1e61fd602045626d5978194eaed615c5918b1ac66d695b05129503a7b1b5', '2026-07-14T09:10:00.000Z', '2026-07-14T10:22:00.000Z')
 ON CONFLICT(id) DO UPDATE SET
   subject = excluded.subject,
