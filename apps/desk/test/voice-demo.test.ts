@@ -117,6 +117,7 @@ describe('voice demo boundary', () => {
     expect(html).toContain('href="/kb">Browse help</a>')
     expect(html).toContain('id="human-help-button"')
     expect(html).toContain('id="conversation-human-button"')
+    expect(html).toContain('aria-label="Ask the team"')
     expect(html).toContain('id="reconnect-banner"')
     expect(html).not.toContain('class="privacy-note"')
     expect(html).toContain('viewport-fit=cover')

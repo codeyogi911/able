@@ -196,6 +196,7 @@ button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visibl
 }
 .human-help-button:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.12); }
 .human-help-button .avatar { width: 26px; height: 26px; font-size: 9px; }
+.human-help-icon { display: grid; place-items: center; }
 
 .thread-list { margin: 0; padding: 0 0 36px; list-style: none; display: flex; flex-direction: column; gap: 28px; }
 .answer-turn { display: grid; gap: 8px; }
@@ -281,17 +282,40 @@ button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visibl
   .chat-header-inner { width: 100%; min-height: 58px; padding: 0 14px; }
   .brand-sub { display: none; }
   .support-nav a, .text-button { min-height: 44px; font-size: 14px; }
-  .app[data-view="landing"] .thread-inner { width: 100%; padding: 44px 20px 32px; }
+  .app[data-view="landing"] .thread-inner { width: 100%; padding: 44px 20px calc(132px + env(safe-area-inset-bottom)); }
   .thread-inner, .composer-inner { width: 100%; padding-left: 16px; padding-right: 16px; }
   .landing-hero h1 { font-size: 2.25rem; line-height: 1.05; }
   .landing-lede { margin-top: 16px; font-size: 14px; }
-  .ask-composer { margin-top: 24px; border-radius: 18px; }
+  .ask-composer {
+    position: fixed;
+    z-index: 10;
+    right: 76px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: 16px;
+    width: auto;
+    min-height: 54px;
+    margin: 0;
+    border-radius: 27px;
+  }
   .landing-trust { font-size: 11.5px; }
   .topics-section { margin-top: 52px; }
   .topic-grid { grid-template-columns: 1fr; gap: 31px; }
   .topics-heading > a, .topic-card h3 a, .topic-card li a { min-height: 44px; display: flex; align-items: center; }
   .topic-card ul { margin-top: 4px; gap: 0; }
-  .human-help-button { position: static; width: 100%; margin-top: 48px; justify-content: center; font-size: 16px; }
+  .human-help-button {
+    position: fixed;
+    z-index: 10;
+    right: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    width: 48px;
+    min-height: 48px;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 16px;
+  }
+  .human-help-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .thread-inner { padding-top: 24px; }
   .thread-list { padding-bottom: 28px; }
   .bubble-stack { max-width: 100%; }

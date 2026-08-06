@@ -51,19 +51,12 @@ const elements = {
   verifyFeedback: required<HTMLElement>('#verify-feedback'),
 }
 
-const SESSION_KEY = 'morrow-voice-support-session'
 const RESET_FOCUS_KEY = 'morrow-voice-support-reset-focus'
 
 function sessionName(): string {
-  try {
-    const existing = sessionStorage.getItem(SESSION_KEY)
-    if (existing) return existing
-    const created = `voice-${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`
-    sessionStorage.setItem(SESSION_KEY, created)
-    return created
-  } catch {
-    return `voice-${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`
-  }
+  // Help always opens at its landing page. A browser refresh is a new visit,
+  // not an accidental restoration of a previous transcript.
+  return `voice-${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`
 }
 
 const client = new VoiceClient({
@@ -82,6 +75,7 @@ let contactPending = false
 type SourceArticle = { title: string; section: string; url: string }
 
 let latestMessages: TranscriptMessage[] = []
+const hiddenTranscriptMessages = new Set<string>()
 let notes: { anchor: number; text: string }[] = []
 let sources: { anchor: number; articles: SourceArticle[] }[] = []
 let ticketAnchor: number | null = null
@@ -125,7 +119,6 @@ function isReady(): boolean {
 
 function reloadFreshSession(): void {
   try {
-    sessionStorage.removeItem(SESSION_KEY)
     sessionStorage.setItem(RESET_FOCUS_KEY, '1')
   } catch {
     // A reload still clears the VoiceClient's in-memory transcript when
@@ -331,7 +324,10 @@ function renderThread(): void {
   }
   for (let index = 0; index < length; index++) {
     pushExtras(index)
-    rows.push(messageRow(latestMessages[index]!))
+    const message = latestMessages[index]!
+    if (!(message.role === 'user' && hiddenTranscriptMessages.has(message.text))) {
+      rows.push(messageRow(message))
+    }
   }
   pushExtras(length)
   if (interimText) rows.push(pendingRow(interimText))
@@ -618,10 +614,13 @@ function renderCustomMessage(value: unknown): void {
     const contact = message.contact as { email?: unknown } | undefined
     const email = typeof contact?.email === 'string' ? contact.email : 'your email'
     pushNote(`We’ll use ${email} for this support action`)
-    // Mid-conversation the card interrupted a flow Ava offered to continue;
-    // a visible, intent-specific confirmation hands the exact flow back to her.
+    // This is a machine-readable continuation, not customer copy. It lets Ava
+    // resume the interrupted flow while keeping the transcript natural.
     const continuation = contactContinuationMessage(message.continuation)
-    if (latestMessages.length > 0 && continuation) client.sendText(continuation)
+    if (latestMessages.length > 0 && continuation) {
+      hiddenTranscriptMessages.add(continuation)
+      client.sendText(continuation)
+    }
     else elements.textInput.focus()
     return
   }

@@ -144,7 +144,10 @@ type VoiceSocketFixture = {
 
 async function installVoiceSocketFixture(
   page: Page,
-  options: { holdSessionReady?: boolean } = {},
+  options: {
+    holdSessionReady?: boolean
+    contactContinuation?: 'order_lookup' | 'open_ticket' | 'product_help'
+  } = {},
 ): Promise<VoiceSocketFixture> {
   let socket: WebSocketRoute | null = null
   let readyPending = false
@@ -172,12 +175,23 @@ async function installVoiceSocketFixture(
         else readyPending = true
         return
       }
+      if (parsed.type === 'set_voice_contact') {
+        send({
+          type: 'voice_contact_set',
+          contact: { name: parsed.name, email: parsed.email },
+          continuation: options.contactContinuation ?? 'continue',
+        })
+        return
+      }
       if (parsed.type !== 'text_message' || typeof parsed.text !== 'string') return
 
       turn += 1
       const answer = `Deterministic support answer ${turn}. Keep the machine unplugged while checking the removable parts. Use the published care instructions below, and stop if anything looks damaged.`
       send({ type: 'status', status: 'thinking' })
       send({ type: 'transcript', role: 'user', text: parsed.text })
+      if (turn === 1 && options.contactContinuation) {
+        send({ type: 'voice_contact_required', anchor: 'after_reply' })
+      }
       send({
         type: 'voice_sources',
         articles: [{
@@ -250,18 +264,42 @@ test('support home opens with the agent as the primary help experience', async (
   await expect(page.getByRole('search')).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Browse help' })).toHaveAttribute('href', '/kb')
   await expect(page.getByRole('heading', { level: 2, name: 'Browse by topic' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Chat with a human' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Ask the team' })).toBeEnabled()
 
   const composerPosition = await page.locator('.ask-composer').evaluate((element) => {
     const box = element.getBoundingClientRect()
-    return { top: box.top, viewportHeight: window.innerHeight }
+    return { top: box.top, bottom: box.bottom, viewportHeight: window.innerHeight }
   })
-  expect(composerPosition.top).toBeLessThan(composerPosition.viewportHeight * .55)
 
   const width = viewportWidth(testInfo)
+  if (width <= 700) {
+    expect(composerPosition.top).toBeGreaterThan(composerPosition.viewportHeight * .65)
+    expect(composerPosition.bottom).toBeLessThanOrEqual(composerPosition.viewportHeight - 12)
+  } else {
+    expect(composerPosition.top).toBeLessThan(composerPosition.viewportHeight * .55)
+  }
   await expectAcceptanceBasics(page, width)
   await expectMobileTargets(page, width, '.support-nav a, .topics-heading a, .topic-card a')
   await screenshot(page, 'agent-home.png')
+})
+
+test('contact continuation stays out of the customer transcript', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'The mobile contact handoff is covered once.')
+  await installVoiceSocketFixture(page, { contactContinuation: 'order_lookup' })
+  await page.goto('/', { waitUntil: 'networkidle' })
+
+  await page.getByLabel('Ask anything').fill('Where is my order?')
+  await page.getByRole('button', { name: 'Send question' }).click()
+  await expect(page.getByLabel('Name')).toBeVisible()
+  await expect(page.getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
+
+  await page.getByLabel('Name').fill('Avery Customer')
+  await page.getByLabel('Email').fill('avery@example.test')
+  await page.getByRole('button', { name: 'Continue' }).click()
+
+  await expect(page.getByText('We’ll use avery@example.test for this support action')).toBeVisible()
+  await expect(page.getByText('Deterministic support answer 2.', { exact: false })).toBeVisible()
+  await expect(page.getByText('I have shared my name and email.', { exact: false })).toHaveCount(0)
 })
 
 test('mobile landing remains stable while the agent session becomes ready', async ({ page }, testInfo) => {

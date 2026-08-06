@@ -159,8 +159,8 @@ export function voiceDemoPageResponse(
             </section>
 
             <button id="human-help-button" class="human-help-button" type="button" disabled>
-              <span aria-hidden="true">${avatar}</span>
-              Chat with a human
+              <span class="human-help-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 10h.01"></path><path d="M12 10h.01"></path><path d="M16 10h.01"></path></svg></span>
+              <span class="human-help-label">Ask the team</span>
             </button>
           </div>
 
@@ -225,7 +225,7 @@ export function voiceDemoPageResponse(
             <button id="mic-button" class="mic-button" type="button" aria-label="Use voice" title="Talk instead of typing" disabled>
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path></svg>
             </button>
-            <button id="conversation-human-button" class="human-action-button" type="button" aria-label="Chat with a human" title="Chat with a human" disabled>
+            <button id="conversation-human-button" class="human-action-button" type="button" aria-label="Ask the team" title="Ask the team" disabled>
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 10h.01"></path><path d="M12 10h.01"></path><path d="M16 10h.01"></path></svg>
             </button>
             <button id="mute-button" class="mute-button" type="button" hidden disabled>Mute</button>
