@@ -24,6 +24,9 @@ const elements = {
   composerBar: required<HTMLElement>('#composer-bar'),
   contactFlow: required<HTMLLIElement>('#contact-flow'),
   contactForm: required<HTMLFormElement>('#contact-form'),
+  contactCardLead: required<HTMLElement>('#contact-card-lead'),
+  contactNameLabel: required<HTMLElement>('#contact-name-label'),
+  contactEmailLabel: required<HTMLElement>('#contact-email-label'),
   contactName: required<HTMLInputElement>('#contact-name'),
   contactEmail: required<HTMLInputElement>('#contact-email'),
   contactSubmit: required<HTMLButtonElement>('#contact-submit'),
@@ -51,19 +54,14 @@ const elements = {
   verifyFeedback: required<HTMLElement>('#verify-feedback'),
 }
 
-const SESSION_KEY = 'morrow-voice-support-session'
+const supportTaskButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-support-message]')]
+
 const RESET_FOCUS_KEY = 'morrow-voice-support-reset-focus'
 
 function sessionName(): string {
-  try {
-    const existing = sessionStorage.getItem(SESSION_KEY)
-    if (existing) return existing
-    const created = `voice-${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`
-    sessionStorage.setItem(SESSION_KEY, created)
-    return created
-  } catch {
-    return `voice-${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`
-  }
+  // Help always opens at its landing page. A browser refresh is a new visit,
+  // not an accidental restoration of a previous transcript.
+  return `voice-${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`
 }
 
 const client = new VoiceClient({
@@ -79,9 +77,13 @@ let sessionReady = false
 let contactReady = false
 let contactPending = false
 
+type ContactReason = 'order_lookup' | 'open_ticket' | 'product_help'
+let contactReason: ContactReason | null = null
+
 type SourceArticle = { title: string; section: string; url: string }
 
 let latestMessages: TranscriptMessage[] = []
+const hiddenTranscriptMessages = new Set<string>()
 let notes: { anchor: number; text: string }[] = []
 let sources: { anchor: number; articles: SourceArticle[] }[] = []
 let ticketAnchor: number | null = null
@@ -125,7 +127,6 @@ function isReady(): boolean {
 
 function reloadFreshSession(): void {
   try {
-    sessionStorage.removeItem(SESSION_KEY)
     sessionStorage.setItem(RESET_FOCUS_KEY, '1')
   } catch {
     // A reload still clears the VoiceClient's in-memory transcript when
@@ -231,7 +232,7 @@ function sourcesRow(anchor: number, articles: SourceArticle[], open: boolean): H
   card.dataset.anchor = String(anchor)
   card.open = open
   const summary = document.createElement('summary')
-  summary.textContent = `Show sources (${articles.length})`
+  summary.textContent = `Based on (${articles.length})`
   card.append(summary)
   const list = document.createElement('div')
   list.className = 'sources-list'
@@ -301,10 +302,10 @@ function renderThread(): void {
   }
   const stick = isNearBottom()
   const length = latestMessages.length
-  const openSourceAnchors = new Set(
-    [...elements.transcript.querySelectorAll<HTMLDetailsElement>('.sources-card[open]')]
-      .map((details) => Number(details.dataset.anchor))
-      .filter(Number.isFinite),
+  const sourceOpenState = new Map(
+    [...elements.transcript.querySelectorAll<HTMLDetailsElement>('.sources-card')]
+      .map((details) => [Number(details.dataset.anchor), details.open] as const)
+      .filter(([anchor]) => Number.isFinite(anchor)),
   )
   const rows: Node[] = []
   const pushExtras = (index: number): void => {
@@ -313,7 +314,7 @@ function renderThread(): void {
     }
     for (const entry of sources) {
       if (entry.anchor <= length && entry.anchor === index) {
-        rows.push(sourcesRow(entry.anchor, entry.articles, openSourceAnchors.has(entry.anchor)))
+        rows.push(sourcesRow(entry.anchor, entry.articles, sourceOpenState.get(entry.anchor) ?? true))
       }
     }
     if (contactAnchor !== null && contactAnchor <= length && contactAnchor === index) {
@@ -331,7 +332,10 @@ function renderThread(): void {
   }
   for (let index = 0; index < length; index++) {
     pushExtras(index)
-    rows.push(messageRow(latestMessages[index]!))
+    const message = latestMessages[index]!
+    if (!(message.role === 'user' && hiddenTranscriptMessages.has(message.text))) {
+      rows.push(messageRow(message))
+    }
   }
   pushExtras(length)
   if (interimText) rows.push(pendingRow(interimText))
@@ -381,6 +385,7 @@ function updateControls(status: VoiceStatus): void {
   elements.app.setAttribute('aria-busy', String(!ready))
   elements.landingInput.disabled = false
   elements.landingSubmit.disabled = !ready
+  for (const task of supportTaskButtons) task.disabled = !ready
   elements.humanHelpButton.disabled = !ready
   elements.textInput.disabled = false
   elements.textSubmit.disabled = !ready
@@ -394,11 +399,56 @@ function updateControls(status: VoiceStatus): void {
   }
 }
 
+function applyContactCardCopy(): void {
+  const copy = contactReason === 'order_lookup'
+    ? {
+      lead: 'Find your order',
+      name: 'Name',
+      email: 'Email used at checkout',
+      feedback: 'We use your email with the order number to protect your details. Your name is used if support needs to follow up.',
+      submit: 'Continue to order lookup',
+    }
+    : contactReason === 'open_ticket'
+      ? {
+        lead: 'Open a private support request',
+        name: 'Name',
+        email: 'Email for your private case link',
+        feedback: 'We use this address for this private support request.',
+        submit: 'Open support request',
+      }
+      : contactReason === 'product_help'
+        ? {
+          lead: 'Send this to support',
+          name: 'Name',
+          email: 'Email for follow-up',
+          feedback: 'We’ll use these details only for this support request.',
+          submit: 'Continue',
+        }
+        : {
+          lead: 'Share support details',
+          name: 'Name',
+          email: 'Email',
+          feedback: 'Used only for the support action you requested.',
+          submit: 'Continue',
+        }
+  elements.contactCardLead.textContent = copy.lead
+  elements.contactNameLabel.textContent = copy.name
+  elements.contactEmailLabel.textContent = copy.email
+  elements.contactFeedback.textContent = copy.feedback
+  elements.contactSubmit.dataset.readyLabel = copy.submit
+}
+
 function updateContactCard(): void {
   elements.contactSubmit.disabled = !connected || contactPending
   elements.contactName.disabled = contactPending
   elements.contactEmail.disabled = contactPending
-  elements.contactSubmit.textContent = contactPending ? 'Saving…' : 'Continue'
+  elements.contactSubmit.textContent = contactPending ? 'Saving…' : elements.contactSubmit.dataset.readyLabel ?? 'Continue'
+}
+
+function readContactReason(value: unknown): ContactReason | null {
+  return value === 'order_lookup' || value === 'open_ticket' || value === 'product_help'
+    ? value
+    : null
 }
 
 function showContactCard(anchor: 'now' | 'after_reply'): void {
@@ -610,18 +660,26 @@ function renderCustomMessage(value: unknown): void {
     return
   }
   if (message.type === 'voice_contact_set') {
+    const completedReason = contactReason
     contactReady = true
     contactPending = false
     hideContactCard()
-    updateContactCard()
     updateControls(client.status)
     const contact = message.contact as { email?: unknown } | undefined
     const email = typeof contact?.email === 'string' ? contact.email : 'your email'
-    pushNote(`We’ll use ${email} for this support action`)
-    // Mid-conversation the card interrupted a flow Ava offered to continue;
-    // a visible, intent-specific confirmation hands the exact flow back to her.
+    pushNote(completedReason === 'order_lookup'
+      ? `We’ll use ${email} only to look up this order`
+      : `We’ll use ${email} for this support action`)
+    contactReason = null
+    applyContactCardCopy()
+    updateContactCard()
+    // This is a machine-readable continuation, not customer copy. It lets Ava
+    // resume the interrupted flow while keeping the transcript natural.
     const continuation = contactContinuationMessage(message.continuation)
-    if (latestMessages.length > 0 && continuation) client.sendText(continuation)
+    if (latestMessages.length > 0 && continuation) {
+      hiddenTranscriptMessages.add(continuation)
+      client.sendText(continuation)
+    }
     else elements.textInput.focus()
     return
   }
@@ -635,6 +693,8 @@ function renderCustomMessage(value: unknown): void {
   if (message.type === 'voice_contact_required') {
     contactReady = false
     contactPending = false
+    contactReason = readContactReason(message.reason)
+    applyContactCardCopy()
     showContactCard(message.anchor === 'after_reply' ? 'after_reply' : 'now')
     return
   }
@@ -649,6 +709,9 @@ function renderCustomMessage(value: unknown): void {
     hideVerifyCard()
     elements.contactName.value = ''
     elements.contactEmail.value = ''
+    contactReason = null
+    applyContactCardCopy()
+    updateContactCard()
     updateControls(client.status)
     if (resetReload !== null) {
       clearTimeout(resetReload)
@@ -836,6 +899,8 @@ elements.clearButton.addEventListener('click', () => {
   elements.textInput.value = ''
   elements.contactName.value = ''
   elements.contactEmail.value = ''
+  contactReason = null
+  applyContactCardCopy()
   setConversationMode(false, true)
   renderThread()
   updateControls(client.status)
@@ -848,12 +913,29 @@ function sendMessage(message: string): boolean {
   return true
 }
 
+function focusSupportRequest(): void {
+  if (!isReady()) return
+  elements.landingInput.placeholder = 'Briefly describe what you need help with'
+  elements.landingStatus.textContent = 'Describe the issue first. Ava will ask for email only if a private request is needed.'
+  elements.landingInput.focus()
+}
+
+function requestHumanHelpForConversation(): void {
+  const latestCustomerMessage = [...latestMessages].reverse().find((message) => message.role === 'user')?.text.trim()
+  if (!latestCustomerMessage) {
+    elements.textInput.placeholder = 'Briefly describe what you need help with'
+    elements.textInput.focus()
+    return
+  }
+  sendMessage(`${HUMAN_HELP_MESSAGE} My issue is: ${latestCustomerMessage}`)
+}
+
 elements.landingForm.addEventListener('submit', (event) => {
   event.preventDefault()
   const message = elements.landingInput.value.trim()
   if (!message) return
   if (!isReady()) {
-    elements.landingStatus.textContent = 'Loading help…'
+    elements.landingStatus.textContent = 'Preparing secure chat…'
     return
   }
   elements.landingInput.blur()
@@ -861,11 +943,18 @@ elements.landingForm.addEventListener('submit', (event) => {
 })
 
 elements.humanHelpButton.addEventListener('click', () => {
-  sendMessage(HUMAN_HELP_MESSAGE)
+  focusSupportRequest()
 })
 
+for (const task of supportTaskButtons) {
+  task.addEventListener('click', () => {
+    const message = task.dataset.supportMessage
+    if (message) sendMessage(message)
+  })
+}
+
 elements.conversationHumanButton.addEventListener('click', () => {
-  sendMessage(HUMAN_HELP_MESSAGE)
+  requestHumanHelpForConversation()
 })
 
 elements.textForm.addEventListener('submit', (event) => {

@@ -33,6 +33,12 @@ await run(['d1', 'migrations', 'apply', 'DB', '--local', '--persist-to', persist
 await run(['d1', 'execute', 'DB', '--local', '--persist-to', persistence, '--file', seed, '--config', config])
 
 const developmentEmail = process.env.MORROW_DEV_EMAIL ?? 'owner@example.com'
+const optionalBindings = [
+  'SHOPIFY_SHOP_DOMAIN',
+  'SHOPIFY_ADMIN_TOKEN',
+  'SHOPIFY_CLIENT_ID',
+  'SHOPIFY_CLIENT_SECRET',
+].flatMap((name) => process.env[name] ? ['--var', `${name}:${process.env[name]}`] : [])
 const server = spawn(wrangler, [
   'dev',
   '--ip', '127.0.0.1',
@@ -40,6 +46,7 @@ const server = spawn(wrangler, [
   '--persist-to', persistence,
   '--var', `MORROW_DEV_EMAIL:${developmentEmail}`,
   '--var', 'MORROW_VOICE_DEMO_ENABLED:1',
+  ...optionalBindings,
   '--config', config,
 ], {
   cwd: root,

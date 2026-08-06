@@ -13,6 +13,8 @@ export default defineConfig({
         bindings: {
           MORROW_DEV_EMAIL: 'owner@example.com',
           MORROW_OPERATOR_HOSTNAME: 'operators.example.test',
+          SHOPIFY_SHOP_DOMAIN: 'shop.example.test',
+          SHOPIFY_ADMIN_TOKEN: 'local-test-token',
           VOICE_TEST_OTP_CODE: '123456',
           WHATSAPP_VERIFY_TOKEN: 'whatsapp-test-verify-token',
           WHATSAPP_APP_SECRET: 'whatsapp-test-app-secret',

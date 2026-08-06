@@ -32,6 +32,8 @@ export type VoiceContactContinuation =
 
 export const PRODUCT_HELP_CONTACT_CONTINUATION =
   'I have shared my name and email. Ask me for my order number before opening a ticket.'
+export const ORDER_LOOKUP_CONTACT_CONTINUATION =
+  'I have shared my name and email. Continue the order lookup using the order number I already gave you, or ask me for it if it is missing.'
 
 /**
  * Resume the exact agent flow interrupted by the in-thread identity card. These
@@ -45,7 +47,7 @@ export function contactContinuationMessage(value: unknown): string | null {
     case 'open_ticket':
       return 'I have shared my name and email. Continue opening the support ticket I requested.'
     case 'order_lookup':
-      return 'I have shared my name and email. Continue the order lookup using the order number I already gave you, or ask me for it if it is missing.'
+      return ORDER_LOOKUP_CONTACT_CONTINUATION
     case 'product_help':
       return PRODUCT_HELP_CONTACT_CONTINUATION
     default:

@@ -1,4 +1,7 @@
-import { PRODUCT_HELP_CONTACT_CONTINUATION } from './contact'
+import {
+  ORDER_LOOKUP_CONTACT_CONTINUATION,
+  PRODUCT_HELP_CONTACT_CONTINUATION,
+} from './contact'
 
 export const VOICE_AGENT_MODEL = '@cf/zai-org/glm-4.7-flash'
 
@@ -26,7 +29,10 @@ function isSupportContinuation(
 }
 
 export function directVoiceResponse(transcript: string, messages: VoiceModelMessage[] = []): string | null {
-  if (transcript.trim() === PRODUCT_HELP_CONTACT_CONTINUATION) {
+  if (
+    transcript.trim() === PRODUCT_HELP_CONTACT_CONTINUATION
+    || transcript.trim() === ORDER_LOOKUP_CONTACT_CONTINUATION
+  ) {
     const orderNumberAlreadyShared = messages
       .slice(0, -1)
       .some((message) => message.role === 'user' && ORDER_NUMBER_MENTION.test(message.content))

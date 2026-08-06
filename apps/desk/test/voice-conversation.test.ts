@@ -4,6 +4,7 @@ import {
   prepareVoiceModelMessages,
   voiceAgentSystemPrompt,
 } from '../src/voice/conversation'
+import { ORDER_LOOKUP_CONTACT_CONTINUATION } from '../src/voice/contact'
 
 describe('voice conversation policy', () => {
   it('joins a spoken ticket request split at a natural pause', () => {
@@ -42,6 +43,17 @@ describe('voice conversation policy', () => {
       { role: 'user', content: 'My order #4021 contains the leaking machine.' },
       { role: 'assistant', content: 'Add your name and email in the card below.' },
       { role: 'user', content: continuation },
+    ])).toBeNull()
+  })
+
+  it('continues a direct order lookup after the contact card without asking twice', () => {
+    expect(directVoiceResponse(ORDER_LOOKUP_CONTACT_CONTINUATION)).toBe(
+      'What is the order number from your confirmation email?',
+    )
+    expect(directVoiceResponse(ORDER_LOOKUP_CONTACT_CONTINUATION, [
+      { role: 'user', content: 'Where is order #SO-4021?' },
+      { role: 'assistant', content: 'Add your name and email in the card below.' },
+      { role: 'user', content: ORDER_LOOKUP_CONTACT_CONTINUATION },
     ])).toBeNull()
   })
 

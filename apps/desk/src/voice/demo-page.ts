@@ -83,6 +83,13 @@ export function voiceDemoPageResponse(
     ? `\n    <link rel="icon" href="${escapeAttribute(branding.faviconUrl)}">`
     : ''
   const avatar = `<span class="avatar" aria-hidden="true">${escapeText(monogram(branding.displayName))}</span>`
+  const orderTaskCopy = ordersEnabled
+    ? 'Use your checkout email and order number.'
+    : 'Ask Ava for the available tracking steps.'
+  const orderTaskMarkup = `<button class="support-task" type="button" data-support-message="I want to track my order." disabled>
+                  <span class="support-task-title">Track an order</span>
+                  <span class="support-task-copy">${orderTaskCopy}</span>
+                </button>`
   const topicMarkup = topics.length > 0
     ? topics.slice(0, 9).map((topic) => `<section class="topic-card">
               <h3><a href="/kb?section=${encodeURIComponent(topic.slug)}">${escapeText(topic.name)}</a></h3>
@@ -133,7 +140,7 @@ export function voiceDemoPageResponse(
           <div id="landing-panel" class="landing-panel">
             <section class="landing-hero" aria-labelledby="help-title">
               <h1 id="help-title">How can we help?</h1>
-              <p class="landing-lede">Ask Ava anything about ${escapeText(workspaceShortName(branding.displayName))}. She answers from our help articles and can bring in the team when you need them.</p>
+              <p class="landing-lede">Ask Ava anything about ${escapeText(workspaceShortName(branding.displayName))}, start a common task, or open a private support request. She answers from our help articles and can bring in the team when you need them.</p>
               <form id="landing-form" class="ask-composer">
                 <span class="ask-icon" aria-hidden="true">${avatar}</span>
                 <input id="landing-input" name="question" autocomplete="off" maxlength="500" placeholder="Ask anything" aria-label="Ask anything">
@@ -144,8 +151,38 @@ export function voiceDemoPageResponse(
                   <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>
                 </button>
               </form>
-              <p class="landing-trust">Ask without identifying yourself. Ava requests contact details only for ${ordersEnabled ? 'order help or ' : ''}team follow-up.</p>
-              <p id="landing-status" class="landing-status" role="status" aria-live="polite"></p>
+              <p class="landing-trust">Start anonymously. Ava asks only for what she needs for ${ordersEnabled ? 'an order lookup or ' : ''}email support.</p>
+              <p id="landing-status" class="landing-status" role="status" aria-live="polite">Preparing secure chat…</p>
+            </section>
+
+            <section class="support-tasks" aria-labelledby="support-tasks-title">
+              <div class="support-tasks-heading">
+                <p class="eyebrow">Common tasks</p>
+                <h2 id="support-tasks-title">Choose a starting point</h2>
+              </div>
+              <div class="support-task-grid">
+                ${orderTaskMarkup}
+                <button class="support-task" type="button" data-support-message="My delivery is delayed." disabled>
+                  <span class="support-task-title">Delivery problem</span>
+                  <span class="support-task-copy">Tell Ava what is delayed and she’ll find the right next step.</span>
+                </button>
+                <button class="support-task" type="button" data-support-message="I need help with warranty or a repair." disabled>
+                  <span class="support-task-title">Warranty or repair</span>
+                  <span class="support-task-copy">Tell Ava what needs repair or what you want to claim.</span>
+                </button>
+                <button class="support-task" type="button" data-support-message="I need help with my invoice." disabled>
+                  <span class="support-task-title">Billing or invoice</span>
+                  <span class="support-task-copy">Ask Ava about an invoice, a charge, or your billing details.</span>
+                </button>
+                <button id="human-help-button" class="support-task support-task--contact" type="button" disabled>
+                  <span class="support-task-title">Contact support</span>
+                  <span class="support-task-copy">Describe your issue first. We’ll ask for your email only if a private request is needed.</span>
+                </button>
+                <a class="support-task" href="/requests/recover">
+                  <span class="support-task-title">Find a request</span>
+                  <span class="support-task-copy">Recover a private case link securely.</span>
+                </a>
+              </div>
             </section>
 
             <section class="topics-section" aria-labelledby="topics-title">
@@ -158,10 +195,6 @@ export function voiceDemoPageResponse(
               </div>
             </section>
 
-            <button id="human-help-button" class="human-help-button" type="button" disabled>
-              <span aria-hidden="true">${avatar}</span>
-              Chat with a human
-            </button>
           </div>
 
           <ol id="transcript" class="thread-list" role="log" aria-label="Conversation with Ava" aria-live="polite" hidden>
@@ -169,13 +202,13 @@ export function voiceDemoPageResponse(
               ${avatar}
               <div class="bubble-stack">
                 <form id="contact-form" class="chat-card">
-                  <p class="chat-card-lead">Who should the team follow up with?</p>
+                  <p id="contact-card-lead" class="chat-card-lead">Share support details</p>
                   <label class="contact-field">
-                    <span>Name</span>
+                    <span id="contact-name-label">Name</span>
                     <input id="contact-name" name="name" type="text" autocomplete="name" maxlength="120" placeholder="Your name" required>
                   </label>
                   <label class="contact-field">
-                    <span>Email</span>
+                    <span id="contact-email-label">Email</span>
                     <input id="contact-email" name="email" type="email" autocomplete="email" maxlength="254" placeholder="you@example.com" required>
                   </label>
                   <button id="contact-submit" class="access-button" type="submit" disabled>Continue</button>
@@ -225,7 +258,7 @@ export function voiceDemoPageResponse(
             <button id="mic-button" class="mic-button" type="button" aria-label="Use voice" title="Talk instead of typing" disabled>
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path></svg>
             </button>
-            <button id="conversation-human-button" class="human-action-button" type="button" aria-label="Chat with a human" title="Chat with a human" disabled>
+            <button id="conversation-human-button" class="human-action-button" type="button" aria-label="Open a support request" title="Open a support request" disabled>
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 10h.01"></path><path d="M12 10h.01"></path><path d="M16 10h.01"></path></svg>
             </button>
             <button id="mute-button" class="mute-button" type="button" hidden disabled>Mute</button>

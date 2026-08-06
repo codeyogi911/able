@@ -5,7 +5,12 @@ import {
   SHOPIFY_API_VERSION,
   shopifyConfigured,
 } from '../src/integrations/shopify'
-import { orderStatusForSession } from '../src/voice/orders'
+import {
+  findOrderNumber,
+  isOrderLookupRequest,
+  orderStatusForSession,
+  orderStatusReply,
+} from '../src/voice/orders'
 
 const ENV = { SHOPIFY_SHOP_DOMAIN: 'example-store.myshopify.com', SHOPIFY_ADMIN_TOKEN: 'shpat-test-token' }
 const CC_ENV = {
@@ -146,6 +151,33 @@ describe('shopify adapter', () => {
       .resolves.toEqual({ status: 'not_found' })
     expect(fetcher).toHaveBeenCalledTimes(1)
     expect(fetcher.mock.calls[0]?.[0]).toBe(GRAPHQL_ENDPOINT)
+  })
+})
+
+describe('deterministic voice order continuation', () => {
+  it('recognizes an order-status request and preserves a previously supplied order number', () => {
+    expect(isOrderLookupRequest('Where is my order?')).toBe(true)
+    expect(isOrderLookupRequest('Can you track order #SO-4021 for me?')).toBe(true)
+    expect(isOrderLookupRequest('How do I clean my router?')).toBe(false)
+    expect(findOrderNumber([
+      { role: 'user', content: 'Where is order #SO-4021?' },
+      { role: 'assistant', content: 'Add your email in the card below.' },
+      { role: 'user', content: 'I have shared my name and email.' },
+    ])).toBe('#SO-4021')
+  })
+
+  it('renders provider results without asking for contact details again', () => {
+    expect(orderStatusReply({ status: 'not_found' })).toContain('email on this session')
+    expect(orderStatusReply({ status: 'unavailable' })).toContain('trouble checking orders')
+    expect(orderStatusReply({ status: 'ok', order: ORDER_SUMMARY })).toContain('TRACK123')
+
+    for (const result of [
+      { status: 'not_found' } as const,
+      { status: 'unavailable' } as const,
+      { status: 'ok', order: ORDER_SUMMARY } as const,
+    ]) {
+      expect(orderStatusReply(result)).not.toMatch(/name|email.*card|contact details/i)
+    }
   })
 })
 
