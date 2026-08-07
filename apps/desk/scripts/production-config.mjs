@@ -2,6 +2,8 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import { parse as parseJsonc } from 'jsonc-parser'
+
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const sourcePath = resolve(repositoryRoot, 'wrangler.jsonc')
 const outputPath = resolve(repositoryRoot, 'wrangler.production.generated.json')
@@ -10,6 +12,15 @@ function required(env, name, pattern) {
   const value = env[name]?.trim()
   if (!value || !pattern.test(value)) throw new Error(`${name} is missing or invalid`)
   return value
+}
+
+export function parseWranglerSource(text) {
+  const errors = []
+  const source = parseJsonc(text, errors, { allowTrailingComma: true })
+  if (errors.length > 0 || typeof source !== 'object' || source === null || Array.isArray(source)) {
+    throw new Error('wrangler.jsonc is not valid JSONC')
+  }
+  return source
 }
 
 export function createProductionConfig(source, env) {
@@ -50,7 +61,7 @@ export function createProductionConfig(source, env) {
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  const source = JSON.parse(await readFile(sourcePath, 'utf8'))
+  const source = parseWranglerSource(await readFile(sourcePath, 'utf8'))
   const production = createProductionConfig(source, process.env)
   await writeFile(outputPath, `${JSON.stringify(production, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
   console.log('Prepared ephemeral production Wrangler configuration')
