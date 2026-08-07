@@ -1,6 +1,8 @@
+import { readFile } from 'node:fs/promises'
+
 import { describe, expect, it } from 'vitest'
 
-import { createProductionConfig } from '../scripts/production-config.mjs'
+import { createProductionConfig, parseWranglerSource } from '../scripts/production-config.mjs'
 
 const source = {
   name: 'able',
@@ -54,5 +56,27 @@ describe('production Wrangler configuration', () => {
       expect(() => createProductionConfig(source, { ...variables, ABLE_WORKER_NAME: name }))
         .toThrow('ABLE_WORKER_NAME is invalid')
     }
+  })
+
+  it('projects the committed wrangler.jsonc, comments included', async () => {
+    // The committed configuration is JSONC, so the deploy path must accept
+    // comments rather than assume plain JSON.
+    const committed = parseWranglerSource(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'))
+    const configured = createProductionConfig(committed, { ...variables, ABLE_WORKER_NAME: 'predecessor' })
+
+    expect(configured.name).toBe('predecessor')
+    expect(configured.d1_databases[0]).toMatchObject({
+      binding: 'DB',
+      database_name: variables.ABLE_D1_DATABASE_NAME,
+      database_id: variables.ABLE_D1_DATABASE_ID,
+    })
+    expect(configured.r2_buckets[0]).toMatchObject({ bucket_name: variables.ABLE_R2_BUCKET_NAME })
+    expect(configured.queues.producers[0].queue).toBe(variables.ABLE_MEDIA_QUEUE_NAME)
+    expect(configured.queues.consumers[0].queue).toBe(variables.ABLE_MEDIA_QUEUE_NAME)
+  })
+
+  it('rejects source text that is not valid JSONC', () => {
+    expect(() => parseWranglerSource('{ "name": ')).toThrow('wrangler.jsonc is not valid JSONC')
+    expect(() => parseWranglerSource('[]')).toThrow('wrangler.jsonc is not valid JSONC')
   })
 })
