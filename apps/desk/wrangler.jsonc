@@ -22,10 +22,20 @@
       }
     ]
   },
+  // Migration tags are an immutable contract: Cloudflare records which tags a
+  // Worker has applied, so an already-applied tag must keep its original
+  // contents. v1 therefore still names the class as it was first created, and
+  // the rename to Able is expressed as a new tag. A fresh install applies both
+  // in sequence and lands on AbleDeskAgent; a Worker that already applied v1
+  // applies only v2 and keeps its Durable Object state.
   "migrations": [
     {
       "tag": "v1_voice_demo",
-      "new_sqlite_classes": ["AbleDeskAgent"]
+      "new_sqlite_classes": ["AbleDeskVoiceDemoAgent"]
+    },
+    {
+      "tag": "v2_rename_desk_agent",
+      "renamed_classes": [{ "from": "AbleDeskVoiceDemoAgent", "to": "AbleDeskAgent" }]
     }
   ],
   "d1_databases": [
