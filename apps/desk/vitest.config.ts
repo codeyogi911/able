@@ -23,7 +23,6 @@ export default defineConfig({
           SHOPIFY_SHOP_DOMAIN: 'shop.example.test',
           SHOPIFY_ADMIN_TOKEN: 'local-test-token',
           SHOPIFY_CUSTOMER_CLIENT_ID: 'customer-test-client',
-          VOICE_TEST_OTP_CODE: '123456',
           WHATSAPP_VERIFY_TOKEN: 'whatsapp-test-verify-token',
           WHATSAPP_APP_SECRET: 'whatsapp-test-app-secret',
           WHATSAPP_ACCESS_TOKEN: 'whatsapp-test-access-token',

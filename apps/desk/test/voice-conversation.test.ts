@@ -4,7 +4,6 @@ import {
   prepareVoiceModelMessages,
   voiceAgentSystemPrompt,
 } from '../src/voice/conversation'
-import { ORDER_LOOKUP_CONTACT_CONTINUATION } from '../src/voice/contact'
 
 describe('voice conversation policy', () => {
   it('joins a spoken ticket request split at a natural pause', () => {
@@ -31,45 +30,36 @@ describe('voice conversation policy', () => {
     expect(directVoiceResponse('I forgot my password yesterday.')).toBeNull()
   })
 
-  it('asks for the order number immediately after the product-help contact card', () => {
-    expect(directVoiceResponse(
-      'I have shared my name and email. Ask me for my order number before opening a ticket.',
-    )).toBe('What is the order number from your confirmation email?')
-  })
-
-  it('does not ask for an order number that the caller already supplied', () => {
-    const continuation = 'I have shared my name and email. Ask me for my order number before opening a ticket.'
-    expect(directVoiceResponse(continuation, [
-      { role: 'user', content: 'My order #4021 contains the leaking machine.' },
-      { role: 'assistant', content: 'Add your name and email in the card below.' },
-      { role: 'user', content: continuation },
-    ])).toBeNull()
-  })
-
-  it('continues a direct order lookup after the contact card without asking twice', () => {
-    expect(directVoiceResponse(ORDER_LOOKUP_CONTACT_CONTINUATION)).toBe(
-      'What is the order number from your confirmation email?',
-    )
-    expect(directVoiceResponse(ORDER_LOOKUP_CONTACT_CONTINUATION, [
-      { role: 'user', content: 'Where is order #SO-4021?' },
-      { role: 'assistant', content: 'Add your name and email in the card below.' },
-      { role: 'user', content: ORDER_LOOKUP_CONTACT_CONTINUATION },
-    ])).toBeNull()
-  })
-
   it('never promises order lookup when Shopify is unavailable', () => {
-    const anonymous = voiceAgentSystemPrompt('Example Company', { orders: false, contact: false })
+    const anonymous = voiceAgentSystemPrompt('Example Company', { orders: false, signedIn: false })
     expect(anonymous).toContain('Order lookup is not available in this workspace.')
-    expect(anonymous).toContain('open a ticket for the team')
     expect(anonymous).not.toContain('I can check your order and get the team on it')
 
-    const configured = voiceAgentSystemPrompt('Example Company', { orders: true, contact: false })
+    const configured = voiceAgentSystemPrompt('Example Company', { orders: true, signedIn: false })
     expect(configured).toContain('I can check your order and get the team on it')
     expect(configured).not.toContain('Order lookup is not available in this workspace.')
   })
 
+  it('routes anonymous identity actions through store sign-in, never typed contact details', () => {
+    const anonymous = voiceAgentSystemPrompt('Example Company', { orders: true, signedIn: false })
+    expect(anonymous).toContain('call request_sign_in')
+    expect(anonymous).toContain('Never ask the caller to type their name, email, or password in the chat')
+    expect(anonymous).not.toContain('request_contact')
+    expect(anonymous).not.toContain('add your name and email')
+
+    const signedIn = voiceAgentSystemPrompt('Example Company', { orders: true, signedIn: true })
+    expect(signedIn).toContain('signed in with their store account')
+    expect(signedIn).toContain('call list_my_orders first')
+    expect(signedIn).not.toContain('request_sign_in')
+
+    const unconfigured = voiceAgentSystemPrompt('Example Company', { orders: false, signedIn: false, signInAvailable: false })
+    expect(unconfigured).toContain('Store-account sign-in is not configured')
+    expect(unconfigured).toContain('support request form')
+    expect(unconfigured).not.toContain('request_sign_in')
+  })
+
   it('treats a product-less warranty question as support context', () => {
-    const prompt = voiceAgentSystemPrompt('Example Company', { orders: true, contact: false })
+    const prompt = voiceAgentSystemPrompt('Example Company', { orders: true, signedIn: false })
 
     expect(prompt).toContain(
       'A question about warranty or another support policy is in scope even when it does not name a product, order, or account.',
@@ -78,7 +68,7 @@ describe('voice conversation policy', () => {
   })
 
   it('uses specific empathy without repeating canned apologies', () => {
-    const prompt = voiceAgentSystemPrompt('Example Company', { orders: true, contact: false })
+    const prompt = voiceAgentSystemPrompt('Example Company', { orders: true, signedIn: false })
 
     expect(prompt).toContain('Make any empathy specific to the problem or impact')
     expect(prompt).toContain('Do not begin each reply with an apology')

@@ -239,15 +239,13 @@ button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visibl
 .chat-card { display: grid; gap: 11px; border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--card); }
 .chat-card-lead { margin: 0; font-size: 14px; font-weight: 680; }
 .chat-card-copy { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
-.contact-field, .code-field { display: grid; gap: 6px; }
-.contact-field span, .code-field span { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.contact-field input, .code-field input { min-width: 0; min-height: 44px; border: 1px solid var(--line-strong); border-radius: 9px; padding: 0 12px; color: var(--ink, #121212); background: #fff; font-size: 16px; }
-.code-field input { min-height: 48px; font-size: 20px; font-weight: 750; letter-spacing: .24em; text-align: center; }
-.contact-field input::placeholder { color: var(--muted); }
 .access-button { min-height: 44px; border-radius: 9px; color: var(--accent-ink, #000); background: var(--accent, #c87942); font-weight: 700; }
+.signin-card { display: grid; gap: 10px; }
+.signin-card .chat-card-lead { font-size: 16px; font-weight: 750; }
+.signin-button { width: 100%; border-radius: 10px; }
 .access-button:not(:disabled):hover { transform: translateY(-1px); }
 .access-feedback { color: var(--muted); font-size: 11.5px; line-height: 1.45; }
-.session-turnstile, .verify-turnstile { overflow: hidden; }
+.session-turnstile { overflow: hidden; }
 .session-turnstile {
   position: fixed;
   z-index: 30;
@@ -257,9 +255,8 @@ button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visibl
   pointer-events: none;
 }
 .session-turnstile:not(:empty) { min-height: 65px; pointer-events: auto; }
-.session-turnstile:empty, .verify-turnstile:empty { display: none; }
+.session-turnstile:empty { display: none; }
 .cf-turnstile { min-height: 65px; overflow: hidden; }
-.verify-form { display: grid; gap: 11px; }
 .eyebrow { margin: 0; color: var(--accent-text, var(--accent, #c87942)); font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .ticket-card { gap: 6px; }
 .ticket-title { margin: 0; font-size: 15px; font-weight: 700; }

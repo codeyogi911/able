@@ -1,20 +1,16 @@
-import {
-  ORDER_LOOKUP_CONTACT_CONTINUATION,
-  PRODUCT_HELP_CONTACT_CONTINUATION,
-} from './contact'
-
 export const VOICE_AGENT_MODEL = '@cf/zai-org/glm-4.7-flash'
 
-export const UNDOCUMENTED_PRODUCT_ORDER_CONTACT_REPLY =
-  "I don't have a documented guide for that. Add your name and email in the card below and I can check your order and get the team on it."
-export const UNDOCUMENTED_PRODUCT_TICKET_CONTACT_REPLY =
-  "I don't have a documented guide for that. Add your name and email in the card below and I can open a ticket for the team."
+export const UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY =
+  "I don't have a documented guide for that. Sign in with your store account below and I can check your order and get the team on it."
+export const UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY =
+  "I don't have a documented guide for that. Sign in with your store account below and I can open a ticket for the team."
+export const UNDOCUMENTED_PRODUCT_FORM_REPLY =
+  "I don't have a documented guide for that. Open a support request through the form and the team will take it from there."
 
 export type VoiceModelMessage = { role: 'user' | 'assistant'; content: string }
 
 const INCOMPLETE_SUPPORT_ACTION = /\b(?:open|create|raise|start)\s+(?:me\s+)?(?:a\s+)?(?:new\s+)?(?:support)?$/i
 const SENSITIVE_DATA_OFFER = /\b(?:tell|give|share|send|provide)\b.{0,60}\b(password|passcode|card number|security code|access token|government id)\b/i
-const ORDER_NUMBER_MENTION = /(?:\border(?:\s+(?:number|no\.?))?\s*[:#-]?\s*[A-Z0-9][A-Z0-9-]{2,31}\b|#[A-Z0-9][A-Z0-9-]{1,31}\b)/i
 
 function isSupportContinuation(
   previousUser: VoiceModelMessage | undefined,
@@ -29,16 +25,6 @@ function isSupportContinuation(
 }
 
 export function directVoiceResponse(transcript: string, messages: VoiceModelMessage[] = []): string | null {
-  if (
-    transcript.trim() === PRODUCT_HELP_CONTACT_CONTINUATION
-    || transcript.trim() === ORDER_LOOKUP_CONTACT_CONTINUATION
-  ) {
-    const orderNumberAlreadyShared = messages
-      .slice(0, -1)
-      .some((message) => message.role === 'user' && ORDER_NUMBER_MENTION.test(message.content))
-    if (orderNumberAlreadyShared) return null
-    return 'What is the order number from your confirmation email?'
-  }
   const sensitiveOffer = SENSITIVE_DATA_OFFER.exec(transcript)
   if (sensitiveOffer) {
     const offered = sensitiveOffer[1]?.toLowerCase() ?? 'sensitive information'
@@ -68,31 +54,25 @@ export function prepareVoiceModelMessages(messages: VoiceModelMessage[]): VoiceM
 
 export function voiceAgentSystemPrompt(
   workspaceName: string,
-  options: { orders?: boolean; contact?: boolean; signedIn?: boolean } = {},
+  options: { orders?: boolean; signedIn?: boolean; signInAvailable?: boolean } = {},
 ): string {
   const name = workspaceName.trim() || 'this workspace'
-  const contact = options.contact !== false
   const ordersAvailable = options.orders === true
   const signedIn = options.signedIn === true
-  // A signed-in caller must never be told to go find an order number: the
-  // sentence below REPLACES the ask-for-number instruction because the model
-  // follows whichever directive it saw last when both are present.
-  const orderAskLine = signedIn
-    ? 'The caller is signed in with their store account, so their identity and email are already verified. For an order question without an order number, call list_my_orders first and confirm which order the caller means — never ask them to find the number. When a specific order number is given, call get_order_status with it. The order tools return only the signed-in caller’s own data.'
-    : 'For order questions, ask the caller for the order number from their order confirmation email.'
-  const orderCapability = ordersAvailable && contact
-    ? `\nYou can look up the caller's order. ${orderAskLine} If any caller message already includes an order number, reuse it and call get_order_status — never ask for it twice. Never ask the caller for an email address; the server already holds this session's email and matches the order automatically. If the tool returns not_found, say you could not find that order for the email on this session: suggest double-checking the number, or restarting the chat with the email used at checkout. If the tool returns unavailable, say you are having trouble checking orders right now — never say the order could not be found. In both cases the reply must end by offering to open a support ticket for the team; never omit that offer. Answer order questions only from tool data — never invent order details, and never speculate about whether an order number exists for a different email. When a product question has no documented answer, offer to check the caller's order so a ticket for the team carries the exact product and purchase date. If the caller's latest message only confirms that they shared their name and email after that undocumented-product handoff, reuse an order number from any earlier caller message and call get_order_status; if none exists, ask only for the order number. Do not create a ticket or claim an order check is underway before the lookup.`
+  const signInAvailable = options.signInAvailable !== false
+  const orderCapability = ordersAvailable && signedIn
+    ? `\nYou can look up the caller's order. The caller is signed in with their store account, so their identity and email are already verified. For an order question without an order number, call list_my_orders first and confirm which order the caller means — never ask them to find the number. When a specific order number is given, call get_order_status with it. The order tools return only the signed-in caller’s own data. If any caller message already includes an order number, reuse it and call get_order_status — never ask for it twice. Never ask the caller for an email address; the server already holds this session's email and matches the order automatically. If the tool returns not_found, say you could not find that order for this store account: it may have been placed with a different email, so they can double-check the number. If the tool returns unavailable, say you are having trouble checking orders right now — never say the order could not be found. In both cases the reply must end by offering to open a support ticket for the team; never omit that offer. Answer order questions only from tool data — never invent order details, and never speculate about whether an order number exists for a different account. When a product question has no documented answer, offer to check the caller's order so a ticket for the team carries the exact product and purchase date. Do not create a ticket or claim an order check is underway before the lookup.`
     : ordersAvailable
       ? ''
       : `\nOrder lookup is not available in this workspace. Never claim that you can check an order, shipping status, product purchase, or purchase date. For order questions, say you cannot check orders here and offer to open a support ticket for team follow-up.`
-  const identityLine = contact
-    ? 'The caller has given the server their name and email; any ticket you open is filed under that contact.'
-    : 'The caller has not shared contact details yet.'
-  const actionCapability = contact
+  const identityLine = signedIn
+    ? 'The caller is signed in with their store account; their identity is verified and any ticket you open is filed under it.'
+    : 'The caller has not signed in yet.'
+  const actionCapability = signedIn
     ? `Use create_ticket when the customer asks to open a ticket or when durable follow-up is needed. After a ticket is created, confirm its reference to the caller. Use request_human for safety, account security, payments or refunds, privacy or legal rights, repeated failed troubleshooting, strong distress, or a request for a person.${orderCapability}`
-    : ordersAvailable
-      ? `Before you can open a ticket or check an order, the caller's name and email must be on file. When the caller asks about their order, wants a ticket, needs human review, or has a product problem with no documented answer, call request_contact — it makes a secure contact card appear under your reply. The card exists only after request_contact returns, so never mention the card without calling request_contact in the same turn. After it returns, reply with one short sentence such as "Sure — add your name and email in the card below and I'll take care of that." If the help-centre search returned no_match, call request_contact with reason product_help and reply exactly: "${UNDOCUMENTED_PRODUCT_ORDER_CONTACT_REPLY}" Never ask the caller to type their name or email in the chat, and never claim a ticket or order lookup happened before the contact card is completed.`
-      : `Before you can open a ticket or request human review, the caller's name and email must be on file. When the caller wants a ticket, needs human review, or has a product problem with no documented answer, call request_contact — it makes a secure contact card appear under your reply. For an order question, explain that order lookup is unavailable and offer a support ticket; if durable follow-up is needed, call request_contact with reason open_ticket. The card exists only after request_contact returns, so never mention the card without calling request_contact in the same turn. If the help-centre search returned no_match, call request_contact with reason product_help and reply exactly: "${UNDOCUMENTED_PRODUCT_TICKET_CONTACT_REPLY}" Never ask the caller to type their name or email in the chat, and never claim a ticket or order lookup happened before the contact card is completed.${orderCapability}`
+    : signInAvailable
+      ? `Identity is Shopify-first: before you can open a ticket, check an order, or hand off to a person, the caller must sign in with their store account. When the caller asks about their order, wants a ticket, needs human review, or has a product problem with no documented answer, call request_sign_in — it makes a sign-in button appear under your reply. The button exists only after request_sign_in returns, so never mention signing in without calling request_sign_in in the same turn. After it returns, reply with one short sentence such as "Sure — sign in below and I'll take care of that." If the help-centre search returned no_match, call request_sign_in with reason product_help and reply exactly: "${ordersAvailable ? UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY : UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY}" Never ask the caller to type their name, email, or password in the chat, and never claim a ticket or order lookup happened before the caller signed in.${orderCapability}`
+      : `Store-account sign-in is not configured for this workspace, so no ticket, order lookup, or human hand-off can happen in this chat. When the caller needs one of those, reply exactly: "${UNDOCUMENTED_PRODUCT_FORM_REPLY}" and point them to the support request form. Never ask the caller to type their name or email in the chat.${orderCapability}`
   return `You are Ava, the concise browser support assistant for ${name}. Only ever present yourself as ${name}'s assistant. ${identityLine}
 
 SCOPE

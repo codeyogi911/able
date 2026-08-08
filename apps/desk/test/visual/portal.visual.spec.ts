@@ -146,8 +146,7 @@ async function installVoiceSocketFixture(
   page: Page,
   options: {
     holdSessionReady?: boolean
-    contactContinuation?: 'order_lookup' | 'open_ticket' | 'product_help'
-    contactReason?: 'order_lookup' | 'open_ticket' | 'product_help'
+    signinReason?: 'order_lookup' | 'open_ticket'
   } = {},
 ): Promise<VoiceSocketFixture> {
   let socket: WebSocketRoute | null = null
@@ -176,22 +175,14 @@ async function installVoiceSocketFixture(
         else readyPending = true
         return
       }
-      if (parsed.type === 'set_voice_contact') {
-        send({
-          type: 'voice_contact_set',
-          contact: { name: parsed.name, email: parsed.email },
-          continuation: options.contactContinuation ?? 'continue',
-        })
-        return
-      }
       if (parsed.type !== 'text_message' || typeof parsed.text !== 'string') return
 
       turn += 1
       const answer = `Deterministic support answer ${turn}. Keep the machine unplugged while checking the removable parts. Use the published care instructions below, and stop if anything looks damaged.`
       send({ type: 'status', status: 'thinking' })
       send({ type: 'transcript', role: 'user', text: parsed.text })
-      if (turn === 1 && options.contactContinuation) {
-        send({ type: 'voice_contact_required', anchor: 'after_reply', reason: options.contactReason })
+      if (turn === 1 && options.signinReason) {
+        send({ type: 'voice_signin_required', anchor: 'after_reply', reason: options.signinReason })
       }
       send({
         type: 'voice_sources',
@@ -295,35 +286,34 @@ test('support home opens with the agent as the primary help experience', async (
   await screenshot(page, 'agent-home.png')
 })
 
-test('contact continuation stays out of the customer transcript', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'mobile-390', 'The mobile contact handoff is covered once.')
-  await installVoiceSocketFixture(page, { contactContinuation: 'order_lookup', contactReason: 'order_lookup' })
+test('the sign-in hand-off renders one card and no typed identity', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'The mobile sign-in handoff is covered once.')
+  await installVoiceSocketFixture(page, { signinReason: 'order_lookup' })
   await page.goto('/', { waitUntil: 'networkidle' })
 
   await page.getByRole('button', { name: /Track an order/ }).click()
-  await expect(page.getByText('Find your order', { exact: true })).toBeVisible()
-  await expect(page.getByLabel('Name')).toBeVisible()
-  await expect(page.getByLabel('Email used at checkout')).toBeVisible()
+  await expect(page.getByText('Sign in to check your order', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sign in with your store account' })).toBeVisible()
+  await expect(page.getByText('Sign-in happens on the store’s own secure page.')).toBeVisible()
   await expect(page.getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
-
-  await page.getByLabel('Name').fill('Avery Customer')
-  await page.getByLabel('Email used at checkout').fill('avery@example.test')
-  await page.getByRole('button', { name: 'Continue to order lookup' }).click()
-
-  await expect(page.getByText('We’ll use avery@example.test only to look up this order')).toBeVisible()
-  await expect(page.getByText('Deterministic support answer 2.', { exact: false })).toBeVisible()
-  await expect(page.getByText('I have shared my name and email.', { exact: false })).toHaveCount(0)
+  // Nothing in the chat asks the customer to type identity.
+  await expect(page.locator('#transcript input')).toHaveCount(0)
 })
 
-test('product-help contact copy stays purpose-specific', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'mobile-390', 'The product-help contact path is covered once.')
-  await installVoiceSocketFixture(page, { contactContinuation: 'product_help', contactReason: 'product_help' })
-  await page.goto('/', { waitUntil: 'networkidle' })
+test('returning from sign-in resumes the conversation without leaking the continuation', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'The sign-in return leg is covered once.')
+  await installVoiceSocketFixture(page)
+  // The client stashes its session name before redirecting; simulate the
+  // return leg of the hosted-login round trip.
+  await page.addInitScript(() => {
+    sessionStorage.setItem('able-signin-resume-session', `voice-${'a'.repeat(20)}`)
+  })
+  await page.goto('/?signed_in=1', { waitUntil: 'networkidle' })
 
-  await page.getByRole('button', { name: /Warranty or repair/ }).click()
-  await expect(page.getByText('Send this to support', { exact: true })).toBeVisible()
-  await expect(page.getByLabel('Email for follow-up')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible()
+  // The continuation turn resumes the flow but stays out of the transcript.
+  await expect(page.getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
+  await expect(page.getByText('I have signed in with my store account', { exact: false })).toHaveCount(0)
+  await expect(page).toHaveURL(/\/$/)
 })
 
 test('contact support asks for the issue before it asks for identity', async ({ page }, testInfo) => {
@@ -335,7 +325,7 @@ test('contact support asks for the issue before it asks for identity', async ({ 
   const input = page.getByLabel('Ask anything')
   await expect(input).toBeFocused()
   await expect(input).toHaveAttribute('placeholder', 'Briefly describe what you need help with')
-  await expect(page.getByText('Describe the issue first. Ava will ask for email only if a private request is needed.')).toBeVisible()
+  await expect(page.getByText('Describe the issue first. Ava will ask you to sign in only if a private request is needed.')).toBeVisible()
   await expect(page.getByLabel('Conversation with Ava')).toBeHidden()
 })
 

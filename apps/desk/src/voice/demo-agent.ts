@@ -15,11 +15,9 @@ import { verifyTurnstileProof } from '../security/public-write'
 import { loadWorkspaceSettings, workspaceShortName } from '../settings'
 import { voiceDemoEnabled } from './demo-page'
 import {
-  hasVoiceContact,
-  normalizeVoiceContact,
-  ORDER_LOOKUP_CONTACT_CONTINUATION,
-  PRODUCT_HELP_CONTACT_CONTINUATION,
+  SIGN_IN_CONTINUATION,
   type VoiceContact,
+  type VoiceSignInReason,
 } from './contact'
 import {
   ESCALATION_CATEGORIES,
@@ -32,8 +30,9 @@ import { claimVoiceTicketCapacity, openVoiceSupportCase } from './support'
 import {
   directVoiceResponse,
   prepareVoiceModelMessages,
-  UNDOCUMENTED_PRODUCT_ORDER_CONTACT_REPLY,
-  UNDOCUMENTED_PRODUCT_TICKET_CONTACT_REPLY,
+  UNDOCUMENTED_PRODUCT_FORM_REPLY,
+  UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY,
+  UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY,
   VOICE_AGENT_MODEL,
   voiceAgentSystemPrompt,
 } from './conversation'
@@ -42,14 +41,10 @@ import {
   bareOrderNumber,
   findOrderNumber,
   isOrderLookupRequest,
+  ordersOverviewReply,
   orderStatusForSession,
   orderStatusReply,
 } from './orders'
-import {
-  createVoiceVerification,
-  verifyVoiceVerificationCode,
-  type VoiceVerificationChallenge,
-} from './verification'
 import { dedupAssistantText } from './dedup'
 import {
   SHOPIFY_CUSTOMER_SESSION_COOKIE,
@@ -88,19 +83,13 @@ type VoiceConnectionState = {
 /**
  * Conversation-scoped state. This lives in Durable Object storage keyed by the
  * session agent, NOT on the WebSocket connection: mobile browsers routinely
- * drop the socket on backgrounding or screen lock, and the customer's contact
- * details and pending flow must survive the client's automatic reconnect. Only
- * transport facts and the per-connection Turnstile proof stay on connections.
+ * drop the socket on backgrounding or screen lock — and the sign-in hand-off
+ * itself navigates away — so the pending flow must survive the client's
+ * reconnect. Identity is never stored here: it arrives as the verified
+ * store-account cookie on every connection. Only transport facts and the
+ * per-connection Turnstile proof stay on connections.
  */
 type VoiceSessionState = {
-  contact?: VoiceContact | null
-  /** True after the contact email was proven via the progressive OTP flow. */
-  verified?: boolean
-  otpChallenge?: VoiceVerificationChallenge | null
-  otpAttempts?: number
-  otpResendAt?: number
-  otpBusy?: boolean
-  otpOperationId?: string | null
   ticketCreatedAt?: number[]
   ticketBusy?: boolean
   pendingEscalation?: {
@@ -108,7 +97,7 @@ type VoiceSessionState = {
     customerMessage: string
     requestId: string
   } | null
-  pendingContactReason?: 'order_lookup' | 'open_ticket' | 'product_help' | null
+  pendingSignInReason?: VoiceSignInReason | null
 }
 
 const SESSION_STATE_KEY = 'voice_session_state'
@@ -212,51 +201,15 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
         }
         return
       }
-      if (parsed.type === 'set_voice_contact') {
-        await this.#setContact(connection, parsed)
-        return
-      }
-      if (parsed.type === 'request_voice_verification') {
-        try {
-          await this.#requestVerification(connection, parsed)
-        } catch {
-          connection.send(JSON.stringify({ type: 'voice_verification_error', reason: 'unavailable' }))
-        }
-        return
-      }
-      if (parsed.type === 'verify_voice_code') {
-        try {
-          await this.#verifyCode(connection, parsed.code)
-        } catch {
-          connection.send(JSON.stringify({ type: 'voice_verification_error', reason: 'unavailable' }))
-        }
-        return
-      }
-      if (parsed.type === 'clear_voice_identity') {
-        await this.#patchSession({
-          contact: null,
-          verified: false,
-          otpChallenge: null,
-          otpAttempts: 0,
-          otpResendAt: 0,
-          otpBusy: false,
-          otpOperationId: null,
-          pendingEscalation: null,
-          pendingContactReason: null,
-        })
-        this.#clearHistory()
-        connection.send(JSON.stringify({ type: 'voice_identity_cleared' }))
-        return
-      }
       if (parsed.type !== 'clear_demo_session') return
       await this.#patchSession({
         pendingEscalation: null,
-        pendingContactReason: null,
+        pendingSignInReason: null,
       })
       this.#clearHistory()
       connection.send(JSON.stringify({ type: 'demo_session_cleared' }))
     } catch {
-      connection.send(JSON.stringify({ type: 'voice_contact_error', reason: 'unavailable' }))
+      connection.send(JSON.stringify({ type: 'voice_session_error', reason: 'unavailable' }))
     }
   }
 
@@ -276,24 +229,34 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       return 'You are sending messages very quickly. Give it a minute, then send that again.'
     }
 
-    const session = await this.#session()
     const shopifyCustomer = await this.#shopifyCustomer(context.connection)
-    // A store-account sign-in IS contact on file — verified, with no card
-    // interruption. An explicitly shared contact still takes precedence so a
-    // caller can direct follow-up to a different address.
-    const contact = hasVoiceContact(session)
-      ? session.contact
-      : shopifyCustomer
-        ? { name: shopifyCustomer.name, email: shopifyCustomer.email }
-        : null
+    // Identity is Shopify-first: the verified store-account session IS the
+    // contact. Nothing is ever typed into the chat.
+    const contact: VoiceContact | null = shopifyCustomer
+      ? { name: shopifyCustomer.name, email: shopifyCustomer.email }
+      : null
+    const signInAvailable = shopifyCustomerConfigured(this.env)
     const turnRequestId = `voice-turn-${crypto.randomUUID()}`
     const messages = context.messages.map(({ role, content }) => ({ role, content }))
+
+    // The client sends this as its first turn after returning from the hosted
+    // store login; escalations and order flows complete deterministically,
+    // while a pending ticket request falls through to the model, which holds
+    // the original request in history and the create_ticket tool.
+    if (transcript.trim() === SIGN_IN_CONTINUATION) {
+      const continuationReply = await this.#completeSignInContinuation(context.connection, shopifyCustomer, contact)
+      if (continuationReply !== null) return continuationReply
+    }
+
     const classifiedCategory = classifyEscalation(transcript)
     const deterministicCategory = isTicketStatusRequest(transcript) && classifiedCategory === 'payment_or_refund'
       ? null
       : classifiedCategory
     if (deterministicCategory) {
       if (!contact) {
+        if (!signInAvailable) {
+          return 'This needs a person from the team to review it. Open a support request through the form and the team will take it from there.'
+        }
         await this.#patchSession({
           pendingEscalation: {
             category: deterministicCategory,
@@ -301,8 +264,8 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
             requestId: turnRequestId,
           },
         })
-        context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply', reason: 'open_ticket' }))
-        return 'This needs a person from the team to review it. Add your email in the card below and I will open a ticket for you right away.'
+        this.#requestSignIn(context.connection, 'open_ticket')
+        return 'This needs a person from the team to review it. Sign in with your store account below and I will open a ticket for you right away.'
       }
       try {
         const ticket = await this.#openEscalationTicket(
@@ -319,33 +282,27 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     }
 
     const ordersAvailable = shopifyConfigured(this.env)
-    if (!contact && ordersAvailable && isOrderLookupRequest(transcript)) {
-      await this.#patchSession({ pendingContactReason: 'order_lookup' })
-      context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply', reason: 'order_lookup' }))
-      return 'To look up your order, add your name and the email used at checkout in the card below.'
+    if (!contact && ordersAvailable && signInAvailable && isOrderLookupRequest(transcript)) {
+      await this.#patchSession({ pendingSignInReason: 'order_lookup' })
+      this.#requestSignIn(context.connection, 'order_lookup')
+      return 'To look up your order, sign in with your store account below and I can pull it up right away.'
     }
 
     // A message that is nothing but an order number is always the order flow —
-    // typically the answer to "what is the order number?", possibly arriving
-    // on a fresh connection after a network drop. It must never fall through
-    // to the model's topic guardrail.
+    // typically the answer to "which order?", possibly arriving on a fresh
+    // connection after a network drop. It must never fall through to the
+    // model's topic guardrail.
     const bareNumber = ordersAvailable ? bareOrderNumber(transcript) : null
     if (bareNumber) {
       if (!contact) {
-        await this.#patchSession({ pendingContactReason: 'order_lookup' })
-        context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply', reason: 'order_lookup' }))
-        return `To look up order ${bareNumber}, add your name and the email used at checkout in the card below.`
+        if (!signInAvailable) {
+          return 'I cannot check orders in this chat. Open a support request through the form and the team will follow up by email.'
+        }
+        await this.#patchSession({ pendingSignInReason: 'order_lookup' })
+        this.#requestSignIn(context.connection, 'order_lookup')
+        return `To look up order ${bareNumber}, sign in with your store account below.`
       }
       const result = await orderStatusForSession(this.env, { email: contact.email }, bareNumber)
-      return orderStatusReply(result)
-    }
-
-    const isOrderContinuation = transcript.trim() === ORDER_LOOKUP_CONTACT_CONTINUATION
-      || transcript.trim() === PRODUCT_HELP_CONTACT_CONTINUATION
-    if (contact && ordersAvailable && isOrderContinuation) {
-      const orderNumber = findOrderNumber(messages.filter((message) => message.content.trim() !== transcript.trim()))
-      if (!orderNumber) return 'What is the order number from your confirmation email?'
-      const result = await orderStatusForSession(this.env, { email: contact.email }, orderNumber)
       return orderStatusReply(result)
     }
 
@@ -353,7 +310,7 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     if (directResponse) return directResponse
 
     const ordersEnabled = ordersAvailable && contact !== null
-    let contactCardRequested = false
+    let signInRequested = false
     const settings = await loadWorkspaceSettings(this.env.DB)
     const workersAI = createWorkersAI({ binding: this.env.AI })
     const result = streamText({
@@ -364,8 +321,8 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       }),
       system: voiceAgentSystemPrompt(workspaceShortName(settings.displayName), {
         orders: ordersAvailable,
-        contact: contact !== null,
         signedIn: shopifyCustomer !== null,
+        signInAvailable,
       }),
       messages: prepareVoiceModelMessages(messages),
       tools: {
@@ -410,12 +367,7 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
             inputSchema: z.object({
               orderNumber: z.string().min(1).max(32).describe("The customer's order number from their confirmation email, e.g. #1234."),
             }),
-            execute: async ({ orderNumber }) => {
-              const current = await this.#session()
-              return orderStatusForSession(this.env, {
-                email: hasVoiceContact(current) ? current.contact.email : null,
-              }, orderNumber)
-            },
+            execute: async ({ orderNumber }) => orderStatusForSession(this.env, { email: contact?.email ?? null }, orderNumber),
           }),
         } : {}),
         ...(contact ? {
@@ -448,29 +400,28 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
             ),
           }),
         } : {
-          request_contact: tool({
-            description: "Show the caller a secure card to share their name and the email used for their order or ticket follow-up. Use it before any order lookup, ticket, or human review when no contact is on file. The card appears under your reply; the caller fills it there, never in the chat.",
-            inputSchema: z.object({
-              reason: z.enum(['order_lookup', 'open_ticket', 'product_help'])
-                .describe('Why contact details are needed right now.'),
+          ...(signInAvailable ? {
+            request_sign_in: tool({
+              description: 'Show the caller a store-account sign-in button. Use it before any order lookup, ticket, or human review when the caller is not signed in. The button appears under your reply; sign-in happens on the store’s own hosted login, never in the chat.',
+              inputSchema: z.object({
+                reason: z.enum(['order_lookup', 'open_ticket', 'product_help'])
+                  .describe('Why a verified identity is needed right now.'),
+              }),
+              execute: async ({ reason }) => {
+                signInRequested = true
+                const continuationReason: VoiceSignInReason = reason === 'order_lookup' && ordersAvailable
+                  ? 'order_lookup'
+                  : reason === 'product_help' && ordersAvailable
+                    ? 'order_lookup'
+                    : 'open_ticket'
+                await this.#patchSession({ pendingSignInReason: continuationReason })
+                this.#requestSignIn(context.connection, continuationReason)
+                return reason === 'product_help'
+                  ? { status: 'requested', responseRequirement: `Reply exactly: "${ordersAvailable ? UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY : UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY}"` }
+                  : { status: 'requested' }
+              },
             }),
-            execute: async ({ reason }) => {
-              contactCardRequested = true
-              const continuationReason = reason === 'product_help' && !ordersAvailable
-                ? 'open_ticket'
-                : reason
-              await this.#patchSession({ pendingContactReason: continuationReason })
-              context.connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply', reason: continuationReason }))
-              return reason === 'product_help'
-                  ? {
-                    status: 'requested',
-                    responseRequirement: ordersAvailable
-                      ? `Reply exactly: "${UNDOCUMENTED_PRODUCT_ORDER_CONTACT_REPLY}"`
-                      : `Reply exactly: "${UNDOCUMENTED_PRODUCT_TICKET_CONTACT_REPLY}"`,
-                  }
-                : { status: 'requested' }
-            },
-          }),
+          } : {}),
         }),
       },
       maxOutputTokens: 120,
@@ -486,18 +437,20 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     if (contact) return stream
 
     // Safety net for the anonymous branch: the model occasionally speaks the
-    // scripted "card below" line without calling request_contact, which would
-    // strand the caller in front of a card that never rendered. If the turn
-    // mentions the card and the tool never fired, send the card anyway.
+    // scripted "sign in below" line without calling request_sign_in, which
+    // would strand the caller in front of a button that never rendered. If the
+    // turn mentions signing in and the tool never fired, send the button
+    // anyway.
     const connection = context.connection
+    const canRequestSignIn = signInAvailable
     return (async function* () {
       let spoken = ''
       for await (const part of stream) {
         if (part.type === 'text-delta') spoken += (part as { text?: string }).text ?? ''
         yield part
       }
-      if (!contactCardRequested && /\bcard\b/i.test(spoken)) {
-        connection.send(JSON.stringify({ type: 'voice_contact_required', anchor: 'after_reply' }))
+      if (canRequestSignIn && !signInRequested && /\bsign[ -]?in\b/i.test(spoken)) {
+        connection.send(JSON.stringify({ type: 'voice_signin_required', anchor: 'after_reply' }))
       }
     })()
   }
@@ -534,186 +487,52 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     connection.send(JSON.stringify({ type: 'voice_session_ready' }))
   }
 
-  async #setContact(connection: Connection, input: Record<string, unknown>): Promise<void> {
-    const state = connectionState(connection)
-    if (state.sessionProofPassed !== true) {
-      connection.send(JSON.stringify({ type: 'voice_contact_error', reason: 'session_required' }))
-      return
-    }
-    const rate = await this.env.PUBLIC_RATE_LIMIT.limit({ key: `voice_contact:${state.clientIp ?? 'unknown'}` })
-    if (!rate.success) {
-      connection.send(JSON.stringify({ type: 'voice_contact_error', reason: 'rate_limited' }))
-      return
-    }
-    const contact = normalizeVoiceContact(input)
-    if (!contact) {
-      connection.send(JSON.stringify({ type: 'voice_contact_error', reason: 'invalid_contact' }))
-      return
+  #requestSignIn(connection: Connection, reason?: VoiceSignInReason): void {
+    connection.send(JSON.stringify({ type: 'voice_signin_required', anchor: 'after_reply', ...(reason ? { reason } : {}) }))
+  }
+
+  /**
+   * The deterministic resume after the hosted-login round trip: complete the
+   * pending escalation or order flow without the model having to re-infer it.
+   */
+  async #completeSignInContinuation(
+    connection: Connection,
+    shopifyCustomer: ShopifyCustomerSession | null,
+    contact: VoiceContact | null,
+  ): Promise<string | null> {
+    if (!shopifyCustomer || !contact) {
+      return 'The sign-in did not complete. Use the sign-in button to try again, or open a support request through the form.'
     }
     const session = await this.#session()
     const pendingEscalation = session.pendingEscalation ?? null
-    const pendingContactReason = session.pendingContactReason ?? null
-    await this.#patchSession({
-      contact,
-      // A new contact is always unverified; any pending challenge is stale.
-      verified: false,
-      otpChallenge: null,
-      otpAttempts: 0,
-      otpResendAt: 0,
-      pendingEscalation: null,
-      pendingContactReason: null,
-    })
-    connection.send(JSON.stringify({
-      type: 'voice_contact_set',
-      contact: { name: contact.name, email: contact.email },
-      continuation: pendingEscalation ? 'handled' : pendingContactReason ?? 'continue',
-    }))
+    const pendingSignInReason = session.pendingSignInReason ?? null
+    await this.#patchSession({ pendingEscalation: null, pendingSignInReason: null })
+
     if (pendingEscalation) {
       try {
-        await this.#openEscalationTicket(
-          connection,
-          contact,
-          pendingEscalation,
-          pendingEscalation.requestId,
-        )
+        const ticket = await this.#openEscalationTicket(connection, contact, pendingEscalation, pendingEscalation.requestId)
+        const emailCopy = ticket.delivery === 'queued' ? ' The private link is queued for email delivery.' : ''
+        return `Thanks ${contact.name}. I’ve opened ticket ${ticket.ref} for human review.${emailCopy}`
       } catch {
-        connection.send(JSON.stringify({ type: 'voice_pending_action_error', reason: 'unavailable' }))
+        return cleanError()
       }
     }
-  }
 
-  async #requestVerification(connection: Connection, input: Record<string, unknown>): Promise<void> {
-    const state = connectionState(connection)
-    const session = await this.#session()
-    const contact = hasVoiceContact(session) ? session.contact : null
-    if (!contact) {
-      connection.send(JSON.stringify({ type: 'voice_verification_error', reason: 'contact_required' }))
-      return
-    }
-    const now = Date.now()
-    if ((session.otpResendAt ?? 0) > now) {
-      connection.send(JSON.stringify({ type: 'voice_verification_error', reason: 'cooldown' }))
-      return
-    }
-    if (session.otpBusy) {
-      connection.send(JSON.stringify({ type: 'voice_verification_error', reason: 'request_in_progress' }))
-      return
-    }
-    const operationId = crypto.randomUUID()
-    await this.#patchSession({ otpBusy: true, otpOperationId: operationId })
-    try {
-      const [ipRate, emailRate] = await Promise.all([
-        this.env.PUBLIC_RATE_LIMIT.limit({ key: `voice_verify_ip:${state.clientIp ?? 'unknown'}` }),
-        this.env.PUBLIC_RATE_LIMIT.limit({ key: `voice_verify_email:${contact.email}` }),
-      ])
-      if (!ipRate.success || !emailRate.success) {
-        connection.send(JSON.stringify({ type: 'voice_verification_error', reason: 'rate_limited' }))
-        return
+    if (pendingSignInReason === 'order_lookup') {
+      const history = (await this.getConversationHistory(40)).map((message) => ({ role: message.role, content: message.content }))
+      const orderNumber = findOrderNumber(history.filter((message) => message.content.trim() !== SIGN_IN_CONTINUATION))
+      if (orderNumber) {
+        const result = await orderStatusForSession(this.env, { email: contact.email }, orderNumber)
+        return orderStatusReply(result)
       }
-      const turnstile = await verifyTurnstileProof({
-        token: typeof input.turnstileToken === 'string' ? input.turnstileToken : null,
-        action: 'voice_verify',
-        ip: state.clientIp ?? 'unknown',
-        hostname: state.hostname ?? '',
-        local: isLocalHostname(state.hostname ?? ''),
-      }, this.env)
-      if (!turnstile.ok) {
-        connection.send(JSON.stringify({ type: 'voice_verification_error', reason: turnstile.reason }))
-        return
-      }
+      const overview = await shopifyCustomerContext(this.env, shopifyCustomer.accessToken, {})
+      if (overview.status !== 'ok') return orderStatusReply({ status: 'unavailable' })
+      return ordersOverviewReply(overview.customer.orders)
+    }
 
-      const settings = await loadWorkspaceSettings(this.env.DB)
-      const sender = settings.outboundSender
-      const secret = this.#secret(state)
-      if (!sender || !settings.supportEmail || !settings.emailTestedAt || !secret) {
-        connection.send(JSON.stringify({ type: 'voice_verification_error', reason: 'email_not_configured' }))
-        return
-      }
-      const testCode = Array.isArray(this.env.TEST_MIGRATIONS) ? this.env.VOICE_TEST_OTP_CODE : undefined
-      const issued = await createVoiceVerification(contact, secret, testCode ? { code: () => testCode } : {})
-      await this.env.EMAIL.send({
-        from: { email: sender, name: `${settings.displayName} Support` },
-        to: contact.email,
-        replyTo: settings.supportEmail,
-        subject: `Your ${settings.displayName} voice-support code`,
-        text: `Your verification code is ${issued.code}. It expires in 10 minutes. If you did not request this code, you can ignore this email.`,
-        headers: { 'Auto-Submitted': 'auto-generated', Organization: settings.displayName },
-      })
-      const latest = await this.#session()
-      if (latest.otpOperationId !== operationId) return
-      await this.#patchSession({
-        otpChallenge: issued.challenge,
-        otpAttempts: 0,
-        otpResendAt: now + 60_000,
-        otpBusy: false,
-        otpOperationId: null,
-        verified: false,
-      })
-      connection.send(JSON.stringify({
-        type: 'voice_verification_sent',
-        emailHint: contact.email.replace(/^(.{1,2}).*(@.*)$/, '$1•••$2'),
-        expiresAt: issued.challenge.expiresAt,
-      }))
-    } finally {
-      const latest = await this.#session()
-      if (latest.otpOperationId === operationId) {
-        await this.#patchSession({ otpBusy: false, otpOperationId: null })
-      }
-    }
-  }
-
-  async #verifyCode(connection: Connection, code: unknown): Promise<void> {
-    const state = connectionState(connection)
-    const session = await this.#session()
-    const challenge = session.otpChallenge
-    const attempts = session.otpAttempts ?? 0
-    if (!challenge || attempts >= 5 || typeof code !== 'string' || session.otpBusy) {
-      connection.send(JSON.stringify({ type: 'voice_verification_error', reason: 'invalid_or_expired_code' }))
-      return
-    }
-    const operationId = crypto.randomUUID()
-    const nextAttempts = attempts + 1
-    await this.#patchSession({
-      otpAttempts: nextAttempts,
-      otpBusy: true,
-      otpOperationId: operationId,
-    })
-    try {
-      const [ipRate, emailRate] = await Promise.all([
-        this.env.PUBLIC_RATE_LIMIT.limit({ key: `voice_verify_code_ip:${state.clientIp ?? 'unknown'}` }),
-        this.env.PUBLIC_RATE_LIMIT.limit({ key: `voice_verify_code_email:${challenge.contact.email}` }),
-      ])
-      if (!ipRate.success || !emailRate.success) {
-        connection.send(JSON.stringify({ type: 'voice_verification_error', reason: 'rate_limited' }))
-        return
-      }
-      const valid = await verifyVoiceVerificationCode(challenge, code.trim(), this.#secret(state), Date.now())
-      const latest = await this.#session()
-      if (latest.otpOperationId !== operationId) return
-      const currentEmail = hasVoiceContact(latest) ? latest.contact.email : null
-      if (!valid || currentEmail !== challenge.contact.email) {
-        await this.#patchSession({
-          otpChallenge: nextAttempts >= 5 ? null : challenge,
-          otpBusy: false,
-          otpOperationId: null,
-        })
-        connection.send(JSON.stringify({ type: 'voice_verification_error', reason: 'invalid_or_expired_code' }))
-        return
-      }
-      await this.#patchSession({
-        verified: true,
-        otpChallenge: null,
-        otpAttempts: 0,
-        otpBusy: false,
-        otpOperationId: null,
-      })
-      connection.send(JSON.stringify({ type: 'voice_verified', email: challenge.contact.email }))
-    } finally {
-      const latest = await this.#session()
-      if (latest.otpOperationId === operationId) {
-        await this.#patchSession({ otpBusy: false, otpOperationId: null })
-      }
-    }
+    // A pending ticket request (or no pending flow at all) continues with the
+    // model: the original ask is in the conversation history.
+    return null
   }
 
   #secret(state: VoiceConnectionState): string {

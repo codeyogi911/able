@@ -2,10 +2,12 @@ import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 
 import { HUMAN_HELP_MESSAGE } from '../src/voice/escalation'
-import { ORDER_LOOKUP_CONTACT_CONTINUATION } from '../src/voice/contact'
+import { SIGN_IN_CONTINUATION } from '../src/voice/contact'
 import { SHOPIFY_CUSTOMER_SESSION_COOKIE, signShopifyCustomerSession } from '../src/identity/shopify-customer'
 
 type TestAgentEnv = typeof env & { AbleDeskAgent: DurableObjectNamespace }
+
+const LOCAL_SECRET = 'able-local-capability-secret-not-for-production'
 
 function nextMessage(socket: WebSocket, predicate: (value: Record<string, unknown>) => boolean): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
@@ -49,8 +51,18 @@ async function proveSession(socket: WebSocket): Promise<void> {
   await ready
 }
 
+async function customerCookie(name: string, email: string): Promise<string> {
+  const token = await signShopifyCustomerSession(LOCAL_SECRET, {
+    name,
+    email,
+    accessToken: 'customer-token-test',
+    expiresAt: Date.now() + 60_000,
+  })
+  return `${SHOPIFY_CUSTOMER_SESSION_COOKIE}=${token}`
+}
+
 describe('voice agent WebSocket boundary', () => {
-  it('gates turns and contact registration on the session proof', async () => {
+  it('gates turns on the session proof', async () => {
     const socket = await connectAgent(`unproven-${crypto.randomUUID()}`)
     try {
       const gatedTurn = nextMessage(
@@ -61,13 +73,6 @@ describe('voice agent WebSocket boundary', () => {
       await expect(gatedTurn).resolves.toMatchObject({
         type: 'transcript_end',
         text: 'Please wait a moment while the chat finishes its anti-spam check, then try again.',
-      })
-
-      const gatedContact = nextMessage(socket, (message) => message.type === 'voice_contact_error')
-      socket.send(JSON.stringify({ type: 'set_voice_contact', name: 'Ada', email: 'ada@example.test' }))
-      await expect(gatedContact).resolves.toMatchObject({
-        type: 'voice_contact_error',
-        reason: 'session_required',
       })
     } finally {
       socket.close()
@@ -88,47 +93,39 @@ describe('voice agent WebSocket boundary', () => {
     }
   })
 
-  it('rejects an invalid email on a proven session', async () => {
-    const socket = await connectAgent(`no-contact-${crypto.randomUUID()}`)
+  it('requests sign-in for a safety escalation and completes the pending ticket after it', async () => {
+    const name = `anon-escalation-${crypto.randomUUID()}`
+    const email = `escalation-${crypto.randomUUID()}@example.test`
+    const first = await connectAgent(name)
     try {
-      await proveSession(socket)
-      const invalidContact = nextMessage(socket, (message) => message.type === 'voice_contact_error')
-      socket.send(JSON.stringify({ type: 'set_voice_contact', email: 'not-an-email' }))
-      await expect(invalidContact).resolves.toMatchObject({ type: 'voice_contact_error', reason: 'invalid_contact' })
-    } finally {
-      socket.close()
-    }
-  })
-
-  it('asks for contact details after the reply, then completes one pending safety ticket', async () => {
-    const socket = await connectAgent(`anon-escalation-${crypto.randomUUID()}`)
-    const email = `anon-escalation-${crypto.randomUUID()}@example.test`
-    try {
-      await proveSession(socket)
-      const cardRequested = nextMessage(socket, (message) => message.type === 'voice_contact_required')
+      await proveSession(first)
+      const signinRequested = nextMessage(first, (message) => message.type === 'voice_signin_required')
       const gated = nextMessage(
-        socket,
+        first,
         (message) => message.type === 'transcript_end' && typeof message.text === 'string',
       )
-      // A deterministic escalation trigger must never silently drop; without
-      // a contact it routes to the in-thread card, not a ticket.
-      socket.send(JSON.stringify({ type: 'text_message', text: 'My document scanner is smoking.' }))
-      await expect(cardRequested).resolves.toMatchObject({ type: 'voice_contact_required', anchor: 'after_reply', reason: 'open_ticket' })
-      const reply = await gated
-      expect(String(reply.text)).toContain('card below')
+      // A deterministic escalation trigger must never silently drop; without a
+      // signed-in caller it routes to the sign-in hand-off, not a ticket.
+      first.send(JSON.stringify({ type: 'text_message', text: 'My document scanner is smoking.' }))
+      await expect(signinRequested).resolves.toMatchObject({ type: 'voice_signin_required', anchor: 'after_reply', reason: 'open_ticket' })
+      expect(String((await gated).text)).toContain('Sign in with your store account below')
+    } finally {
+      first.close()
+    }
 
-      const contactSet = nextMessage(socket, (message) => message.type === 'voice_contact_set')
-      const ticketCreated = nextMessage(socket, (message) => message.type === 'voice_ticket_created')
-      socket.send(JSON.stringify({ type: 'set_voice_contact', name: 'Anonymous Customer', email }))
-      await expect(contactSet).resolves.toMatchObject({
-        type: 'voice_contact_set',
-        continuation: 'handled',
-        contact: { name: 'Anonymous Customer', email },
-      })
+    // The hosted-login round trip returns on a fresh connection carrying the
+    // verified session cookie; the continuation completes the parked ticket.
+    const second = await connectAgent(name, 'http://localhost', await customerCookie('Escalation Customer', email))
+    try {
+      await proveSession(second)
+      const ticketCreated = nextMessage(second, (message) => message.type === 'voice_ticket_created')
+      const reply = nextMessage(second, (message) => message.type === 'transcript_end')
+      second.send(JSON.stringify({ type: 'text_message', text: SIGN_IN_CONTINUATION }))
       await expect(ticketCreated).resolves.toMatchObject({
         type: 'voice_ticket_created',
         ticket: { status: 'open' },
       })
+      expect(String((await reply).text)).toContain('for human review')
 
       const count = await env.DB.prepare(
         `SELECT COUNT(*) AS count
@@ -138,15 +135,15 @@ describe('voice agent WebSocket boundary', () => {
       ).bind(email).first<{ count: number }>()
       expect(count?.count).toBe(1)
     } finally {
-      socket.close()
+      second.close()
     }
   })
 
-  it('routes the landing human-help action into JIT identity after the explanation', async () => {
+  it('routes the landing human-help action into the sign-in hand-off', async () => {
     const socket = await connectAgent(`human-help-${crypto.randomUUID()}`)
     try {
       await proveSession(socket)
-      const cardRequested = nextMessage(socket, (message) => message.type === 'voice_contact_required')
+      const signinRequested = nextMessage(socket, (message) => message.type === 'voice_signin_required')
       const reply = nextMessage(
         socket,
         (message) => message.type === 'transcript_end' && typeof message.text === 'string',
@@ -154,153 +151,118 @@ describe('voice agent WebSocket boundary', () => {
 
       socket.send(JSON.stringify({ type: 'text_message', text: HUMAN_HELP_MESSAGE }))
 
-      await expect(cardRequested).resolves.toMatchObject({ type: 'voice_contact_required', anchor: 'after_reply', reason: 'open_ticket' })
+      await expect(signinRequested).resolves.toMatchObject({ type: 'voice_signin_required', anchor: 'after_reply', reason: 'open_ticket' })
       await expect(reply).resolves.toMatchObject({ type: 'transcript_end' })
     } finally {
       socket.close()
     }
   })
 
-  it('continues an order request after contact without repeating the identity request', async () => {
-    const socket = await connectAgent(`order-contact-${crypto.randomUUID()}`)
+  it('requests sign-in for an order question and never asks for typed details', async () => {
+    const socket = await connectAgent(`order-signin-${crypto.randomUUID()}`)
     try {
       await proveSession(socket)
-      const cardRequested = nextMessage(socket, (message) => message.type === 'voice_contact_required')
+      const signinRequested = nextMessage(socket, (message) => message.type === 'voice_signin_required')
       const initialReply = nextMessage(socket, (message) => message.type === 'transcript_end')
       socket.send(JSON.stringify({ type: 'text_message', text: 'Where is my order?' }))
 
-      await expect(cardRequested).resolves.toMatchObject({ anchor: 'after_reply', reason: 'order_lookup' })
-      await expect(initialReply).resolves.toMatchObject({
-        text: 'To look up your order, add your name and the email used at checkout in the card below.',
-      })
-
-      const contactSet = nextMessage(socket, (message) => message.type === 'voice_contact_set')
-      socket.send(JSON.stringify({
-        type: 'set_voice_contact',
-        name: 'Local Order Tester',
-        email: 'local-order@example.test',
-      }))
-      await expect(contactSet).resolves.toMatchObject({ continuation: 'order_lookup' })
-
-      const lookupReply = nextMessage(socket, (message) => message.type === 'transcript_end')
-      socket.send(JSON.stringify({ type: 'text_message', text: ORDER_LOOKUP_CONTACT_CONTINUATION }))
-      const result = await lookupReply
-      expect(result).toMatchObject({ text: 'What is the order number from your confirmation email?' })
-      expect(String(result.text)).not.toMatch(/add your name|email.*card/i)
-
-      // The customer answers with nothing but the order number — that is the
-      // order flow, never the model's topic guardrail.
-      const numberReply = nextMessage(socket, (message) => message.type === 'transcript_end')
-      socket.send(JSON.stringify({ type: 'text_message', text: '2026-27/7903.' }))
-      expect(String((await numberReply).text)).toContain('trouble checking orders')
+      await expect(signinRequested).resolves.toMatchObject({ anchor: 'after_reply', reason: 'order_lookup' })
+      const reply = await initialReply
+      expect(String(reply.text)).toContain('sign in with your store account below')
+      expect(String(reply.text)).not.toMatch(/name and email|checkout email/i)
     } finally {
       socket.close()
     }
   })
 
-  it('resumes contact and the order flow across a dropped connection', async () => {
-    // Mobile browsers routinely drop the WebSocket mid-flow; the session agent
-    // must keep the contact and pending order lookup for the reconnect.
-    const name = `order-reconnect-${crypto.randomUUID()}`
+  it('resumes the order flow after the sign-in round trip', async () => {
+    // The sign-in hand-off itself navigates away; the pending flow must
+    // survive and complete deterministically when the caller returns.
+    const name = `order-signin-resume-${crypto.randomUUID()}`
     const first = await connectAgent(name)
     try {
       await proveSession(first)
-      const cardRequested = nextMessage(first, (message) => message.type === 'voice_contact_required')
+      const signinRequested = nextMessage(first, (message) => message.type === 'voice_signin_required')
       first.send(JSON.stringify({ type: 'text_message', text: 'My delivery is delayed.' }))
-      await expect(cardRequested).resolves.toMatchObject({ anchor: 'after_reply', reason: 'order_lookup' })
-
-      const contactSet = nextMessage(first, (message) => message.type === 'voice_contact_set')
-      first.send(JSON.stringify({ type: 'set_voice_contact', name: 'Radha Tester', email: 'radha@example.test' }))
-      await expect(contactSet).resolves.toMatchObject({ continuation: 'order_lookup' })
+      await expect(signinRequested).resolves.toMatchObject({ anchor: 'after_reply', reason: 'order_lookup' })
     } finally {
       first.close()
     }
 
-    const second = await connectAgent(name)
+    const second = await connectAgent(name, 'http://localhost', await customerCookie('Radha Tester', 'radha@example.test'))
     try {
       await proveSession(second)
       const reply = nextMessage(second, (message) => message.type === 'transcript_end')
-      second.send(JSON.stringify({ type: 'text_message', text: '#2026-27/7903' }))
+      second.send(JSON.stringify({ type: 'text_message', text: SIGN_IN_CONTINUATION }))
       const message = await reply
-      // The stored contact answers the lookup directly: no re-asking for the
-      // card, no off-topic refusal.
+      // The customer-context read is unavailable against the test shop, and
+      // the reply reports that truthfully instead of claiming no orders.
       expect(String(message.text)).toContain('trouble checking orders')
-      expect(String(message.text)).not.toMatch(/only help with support|add your name/i)
+      expect(String(message.text)).not.toMatch(/only help with support|name and email/i)
     } finally {
       second.close()
     }
   })
 
-  it('treats a store-account session as verified contact and never shows the card', async () => {
-    const token = await signShopifyCustomerSession('able-local-capability-secret-not-for-production', {
-      name: 'Signed In Customer',
-      email: 'signed-in@example.test',
-      accessToken: 'shcat-test-token',
-      expiresAt: Date.now() + 60_000,
-    })
+  it('treats a store-account session as verified identity for direct lookups', async () => {
     const socket = await connectAgent(
       `shopify-session-${crypto.randomUUID()}`,
       'http://localhost',
-      `${SHOPIFY_CUSTOMER_SESSION_COOKIE}=${token}`,
+      await customerCookie('Signed In Customer', 'signed-in@example.test'),
     )
     try {
       await proveSession(socket)
-      let cardShown = false
+      let signinShown = false
       socket.addEventListener('message', (event) => {
-        if (typeof event.data === 'string' && JSON.parse(event.data).type === 'voice_contact_required') cardShown = true
+        if (typeof event.data === 'string' && JSON.parse(event.data).type === 'voice_signin_required') signinShown = true
       })
       // A bare order number from a signed-in caller goes straight to lookup
-      // under the verified email — no contact card, no guardrail.
+      // under the verified email — no sign-in card, no guardrail.
       const reply = nextMessage(socket, (message) => message.type === 'transcript_end')
       socket.send(JSON.stringify({ type: 'text_message', text: '#2026-27/7903' }))
       const message = await reply
       expect(String(message.text)).toContain('trouble checking orders')
-      expect(String(message.text)).not.toMatch(/card below|only help with support/i)
-      expect(cardShown).toBe(false)
+      expect(String(message.text)).not.toMatch(/sign in|only help with support/i)
+      expect(signinShown).toBe(false)
     } finally {
       socket.close()
     }
   })
 
   it('ignores a tampered store-account session token', async () => {
-    const token = await signShopifyCustomerSession('able-local-capability-secret-not-for-production', {
-      name: 'Tampered Customer',
-      email: 'tampered@example.test',
-      accessToken: 'shcat-test-token',
-      expiresAt: Date.now() + 60_000,
-    })
+    const cookie = await customerCookie('Tampered Customer', 'tampered@example.test')
     const socket = await connectAgent(
       `shopify-tampered-${crypto.randomUUID()}`,
       'http://localhost',
-      `${SHOPIFY_CUSTOMER_SESSION_COOKIE}=${token}TAMPERED`,
+      `${cookie}TAMPERED`,
     )
     try {
       await proveSession(socket)
-      // Without a valid session the bare number behaves anonymously: the
-      // contact card is requested once.
-      const cardRequested = nextMessage(socket, (message) => message.type === 'voice_contact_required')
+      // Without a valid session the bare number behaves anonymously: sign-in
+      // is requested once.
+      const signinRequested = nextMessage(socket, (message) => message.type === 'voice_signin_required')
       socket.send(JSON.stringify({ type: 'text_message', text: '#2026-27/7903' }))
-      await expect(cardRequested).resolves.toMatchObject({ reason: 'order_lookup' })
+      await expect(signinRequested).resolves.toMatchObject({ reason: 'order_lookup' })
     } finally {
       socket.close()
     }
   })
 
-  it('asks for contact once when a bare order number arrives with nobody on file', async () => {
+  it('asks to sign in once when a bare order number arrives anonymously', async () => {
     const socket = await connectAgent(`bare-number-${crypto.randomUUID()}`)
     try {
       await proveSession(socket)
-      const cardRequested = nextMessage(socket, (message) => message.type === 'voice_contact_required')
+      const signinRequested = nextMessage(socket, (message) => message.type === 'voice_signin_required')
       const reply = nextMessage(socket, (message) => message.type === 'transcript_end')
       socket.send(JSON.stringify({ type: 'text_message', text: '#2026-27/7903' }))
-      await expect(cardRequested).resolves.toMatchObject({ reason: 'order_lookup' })
-      expect(String((await reply).text)).toContain('To look up order #2026-27/7903')
+      await expect(signinRequested).resolves.toMatchObject({ reason: 'order_lookup' })
+      expect(String((await reply).text)).toContain('To look up order #2026-27/7903, sign in with your store account below.')
     } finally {
       socket.close()
     }
   })
 
-  it('stores unverified contact details once and creates a real voice ticket', async () => {
+  it('creates a real voice ticket under the signed-in identity', async () => {
     await env.DB.prepare(`UPDATE workspace_settings SET
       support_email = 'support@example.test',
       outbound_sender = 'sender@example.test',
@@ -309,22 +271,14 @@ describe('voice agent WebSocket boundary', () => {
       updated_at = CURRENT_TIMESTAMP
       WHERE id = 1`).run()
 
-    const socket = await connectAgent(`contact-${crypto.randomUUID()}`)
+    const email = `ticket-${crypto.randomUUID()}@example.test`
+    const socket = await connectAgent(
+      `signed-ticket-${crypto.randomUUID()}`,
+      'http://localhost',
+      await customerCookie('Ada Customer', email),
+    )
     try {
       await proveSession(socket)
-      const contactSet = nextMessage(socket, (message) => message.type === 'voice_contact_set')
-      socket.send(JSON.stringify({
-        type: 'set_voice_contact',
-        email: 'ada-voice@example.test',
-        name: 'Ada Customer',
-        // Extra client fields must not become stored contact or ticket data.
-        phone: '+65 9123 4567',
-      }))
-      await expect(contactSet).resolves.toMatchObject({
-        type: 'voice_contact_set',
-        contact: { name: 'Ada Customer', email: 'ada-voice@example.test' },
-      })
-
       const incomplete = nextMessage(socket, (message) => message.type === 'transcript_end')
       socket.send(JSON.stringify({ type: 'text_message', text: 'Can you open a new support' }))
       await expect(incomplete).resolves.toMatchObject({
@@ -354,7 +308,7 @@ describe('voice agent WebSocket boundary', () => {
          JOIN customers ON customers.id = cases.customer_id
          JOIN messages ON messages.case_id = cases.id
          WHERE customers.email = ?`,
-      ).bind('ada-voice@example.test').first<{
+      ).bind(email).first<{
         ref: string
         channel: string
         name: string
@@ -366,114 +320,10 @@ describe('voice agent WebSocket boundary', () => {
         ref: (ticket.ticket as { reference: string }).reference,
         channel: 'voice',
         name: 'Ada Customer',
-        email: 'ada-voice@example.test',
+        email,
         phone: null,
         message_channel: 'voice',
       })
-    } finally {
-      socket.close()
-    }
-  })
-
-  it('verifies the contact email progressively and resets on identity clear', async () => {
-    await env.DB.prepare(`UPDATE workspace_settings SET
-      support_email = 'support@example.test',
-      outbound_sender = 'sender@example.test',
-      email_tested_at = CURRENT_TIMESTAMP,
-      portal_base_url = 'http://localhost',
-      updated_at = CURRENT_TIMESTAMP
-      WHERE id = 1`).run()
-
-    const socket = await connectAgent(`verify-${crypto.randomUUID()}`)
-    try {
-      await proveSession(socket)
-      const needsContact = nextMessage(socket, (message) => message.type === 'voice_verification_error')
-      socket.send(JSON.stringify({ type: 'request_voice_verification' }))
-      await expect(needsContact).resolves.toMatchObject({ reason: 'contact_required' })
-
-      const contactSet = nextMessage(socket, (message) => message.type === 'voice_contact_set')
-      socket.send(JSON.stringify({ type: 'set_voice_contact', name: 'Ada Verify', email: 'ada-verify@example.test' }))
-      await contactSet
-
-      const sent = nextMessage(socket, (message) => message.type === 'voice_verification_sent')
-      socket.send(JSON.stringify({ type: 'request_voice_verification' }))
-      await expect(sent).resolves.toMatchObject({
-        type: 'voice_verification_sent',
-        emailHint: 'ad•••@example.test',
-      })
-
-      const cooldown = nextMessage(socket, (message) => message.type === 'voice_verification_error')
-      socket.send(JSON.stringify({ type: 'request_voice_verification' }))
-      await expect(cooldown).resolves.toMatchObject({ reason: 'cooldown' })
-
-      const wrongCode = nextMessage(socket, (message) => message.type === 'voice_verification_error')
-      socket.send(JSON.stringify({ type: 'verify_voice_code', code: '000000' }))
-      await expect(wrongCode).resolves.toMatchObject({ reason: 'invalid_or_expired_code' })
-
-      const verified = nextMessage(socket, (message) => message.type === 'voice_verified')
-      socket.send(JSON.stringify({ type: 'verify_voice_code', code: '123456' }))
-      await expect(verified).resolves.toMatchObject({ type: 'voice_verified', email: 'ada-verify@example.test' })
-
-      const cleared = nextMessage(socket, (message) => message.type === 'voice_identity_cleared')
-      socket.send(JSON.stringify({ type: 'clear_voice_identity' }))
-      await cleared
-
-      const afterClear = nextMessage(socket, (message) => message.type === 'voice_verification_error')
-      socket.send(JSON.stringify({ type: 'verify_voice_code', code: '123456' }))
-      await expect(afterClear).resolves.toMatchObject({ reason: 'invalid_or_expired_code' })
-    } finally {
-      socket.close()
-    }
-  })
-
-  it('caps verification attempts at five per challenge', async () => {
-    await env.DB.prepare(`UPDATE workspace_settings SET
-      support_email = 'support@example.test',
-      outbound_sender = 'sender@example.test',
-      email_tested_at = CURRENT_TIMESTAMP,
-      portal_base_url = 'http://localhost',
-      updated_at = CURRENT_TIMESTAMP
-      WHERE id = 1`).run()
-
-    const socket = await connectAgent(`verify-cap-${crypto.randomUUID()}`)
-    try {
-      await proveSession(socket)
-      const contactSet = nextMessage(socket, (message) => message.type === 'voice_contact_set')
-      socket.send(JSON.stringify({ type: 'set_voice_contact', name: 'Ada Capacity', email: 'ada-cap@example.test' }))
-      await contactSet
-
-      const sent = nextMessage(socket, (message) => message.type === 'voice_verification_sent')
-      socket.send(JSON.stringify({ type: 'request_voice_verification' }))
-      await sent
-
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const failure = nextMessage(socket, (message) => message.type === 'voice_verification_error')
-        socket.send(JSON.stringify({ type: 'verify_voice_code', code: '000000' }))
-        await expect(failure).resolves.toMatchObject({ reason: 'invalid_or_expired_code' })
-      }
-
-      // The correct code is rejected after the attempt cap destroys the challenge.
-      const capped = nextMessage(socket, (message) => message.type === 'voice_verification_error')
-      socket.send(JSON.stringify({ type: 'verify_voice_code', code: '123456' }))
-      await expect(capped).resolves.toMatchObject({ reason: 'invalid_or_expired_code' })
-    } finally {
-      socket.close()
-    }
-  })
-
-  it('rate limits repeated contact registration per client', async () => {
-    const socket = await connectAgent(`rate-${crypto.randomUUID()}`)
-    try {
-      await proveSession(socket)
-      let sawRateLimit = false
-      for (let attempt = 0; attempt < 12 && !sawRateLimit; attempt++) {
-        const error = nextMessage(socket, (message) => message.type === 'voice_contact_error')
-        socket.send(JSON.stringify({ type: 'set_voice_contact', email: 'not-an-email' }))
-        const received = await error
-        expect(['invalid_contact', 'rate_limited']).toContain(received.reason)
-        sawRateLimit = received.reason === 'rate_limited'
-      }
-      expect(sawRateLimit).toBe(true)
     } finally {
       socket.close()
     }

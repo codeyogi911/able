@@ -38,8 +38,6 @@ export type Env = Cloudflare.Env & {
   SHOPIFY_ADMIN_TOKEN?: string
   /** Customer Account API public client ID enabling optional customer sign-in on the support portal. */
   SHOPIFY_CUSTOMER_CLIENT_ID?: string
-  /** Test-only deterministic voice verification code; never bind this in a deployed environment. */
-  VOICE_TEST_OTP_CODE?: string
   /** Meta callback token used only for the WhatsApp webhook GET challenge. */
   WHATSAPP_VERIFY_TOKEN?: string
   /** Meta app secret used to verify X-Hub-Signature-256 on webhook POSTs. */

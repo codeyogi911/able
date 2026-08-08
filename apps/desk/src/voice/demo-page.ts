@@ -91,9 +91,13 @@ export function voiceDemoPageResponse(
     ? `\n    <link rel="icon" href="${escapeAttribute(branding.faviconUrl)}">`
     : ''
   const avatar = `<span class="avatar" aria-hidden="true">${escapeText(monogram(branding.displayName))}</span>`
-  const orderTaskCopy = ordersEnabled
-    ? 'Use your checkout email and order number.'
-    : 'Ask Ava for the available tracking steps.'
+  const orderTaskCopy = identity.customerName
+    ? 'You’re signed in — Ava can pull up your recent orders.'
+    : ordersEnabled && identity.configured
+      ? 'Sign in with your store account and Ava pulls it up instantly.'
+      : ordersEnabled
+        ? 'Share the order number and Ava will check it.'
+        : 'Ask Ava for the available tracking steps.'
   const orderTaskMarkup = `<button class="support-task" type="button" data-support-message="I want to track my order." disabled>
                   <span class="support-task-title">Track an order</span>
                   <span class="support-task-copy">${orderTaskCopy}</span>
@@ -163,7 +167,11 @@ export function voiceDemoPageResponse(
                   <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>
                 </button>
               </form>
-              <p class="landing-trust">Start anonymously. Ava asks only for what she needs for ${ordersEnabled ? 'an order lookup or ' : ''}email support.</p>
+              <p class="landing-trust">${identity.customerName
+                ? `Signed in as ${escapeText(identity.customerName)}. Ava can use your store account for order help.`
+                : identity.configured
+                  ? 'Start anonymously — answers need no account. Sign in with your store account for order help or tickets.'
+                  : 'Start anonymously. Ava answers from the help centre; use the support form for follow-up.'}</p>
               <p id="landing-status" class="landing-status" role="status" aria-live="polite">Preparing secure chat…</p>
             </section>
 
@@ -188,7 +196,7 @@ export function voiceDemoPageResponse(
                 </button>
                 <button id="human-help-button" class="support-task support-task--contact" type="button" disabled>
                   <span class="support-task-title">Contact support</span>
-                  <span class="support-task-copy">Describe your issue first. We’ll ask for your email only if a private request is needed.</span>
+                  <span class="support-task-copy">Describe your issue first. Sign-in is needed only when a private request is opened.</span>
                 </button>
                 <a class="support-task" href="/requests/recover">
                   <span class="support-task-title">Find a request</span>
@@ -210,40 +218,14 @@ export function voiceDemoPageResponse(
           </div>
 
           <ol id="transcript" class="thread-list" role="log" aria-label="Conversation with Ava" aria-live="polite" hidden>
-            <li class="bubble-row bubble-row--assistant" id="contact-flow" hidden>
+            <li class="bubble-row bubble-row--assistant" id="signin-flow" hidden>
               ${avatar}
               <div class="bubble-stack">
-                <form id="contact-form" class="chat-card">
-                  <p id="contact-card-lead" class="chat-card-lead">Share support details</p>
-                  <label class="contact-field">
-                    <span id="contact-name-label">Name</span>
-                    <input id="contact-name" name="name" type="text" autocomplete="name" maxlength="120" placeholder="Your name" required>
-                  </label>
-                  <label class="contact-field">
-                    <span id="contact-email-label">Email</span>
-                    <input id="contact-email" name="email" type="email" autocomplete="email" maxlength="254" placeholder="you@example.com" required>
-                  </label>
-                  <button id="contact-submit" class="access-button" type="submit" disabled>Continue</button>
-                  <span id="contact-feedback" class="access-feedback" aria-live="polite">Used only for the support action you requested.</span>
-                </form>
-              </div>
-            </li>
-            <li id="verify-card" class="bubble-row bubble-row--assistant" hidden>
-              ${avatar}
-              <div class="bubble-stack">
-                <div class="chat-card">
-                  <p class="chat-card-lead">To share order details I need to confirm this email is yours.</p>
-                  <p class="chat-card-copy">I’ll email a six-digit code to <strong id="verify-email">the address you shared</strong>. It expires in 10 minutes.</p>
-                  <div id="verify-turnstile" class="verify-turnstile" data-sitekey="${escapeAttribute(turnstileSiteKey)}"></div>
-                  <button id="verify-send" class="access-button" type="button">Email me a code</button>
-                  <form id="verify-form" class="verify-form" hidden>
-                    <label class="code-field">
-                      <span>Code from the email</span>
-                      <input id="verify-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="123456" required>
-                    </label>
-                    <button id="verify-submit" class="access-button" type="submit">Confirm code</button>
-                  </form>
-                  <span id="verify-feedback" class="access-feedback" aria-live="polite"></span>
+                <div class="chat-card signin-card">
+                  <p id="signin-card-lead" class="chat-card-lead">Sign in to continue</p>
+                  <p id="signin-card-copy" class="chat-card-copy">Use your store account — a quick code by email, no password. You’ll come right back to this conversation.</p>
+                  <button id="signin-button" class="access-button signin-button" type="button">Sign in with your store account</button>
+                  <span class="access-feedback">Sign-in happens on the store’s own secure page.</span>
                 </div>
               </div>
             </li>
@@ -252,7 +234,7 @@ export function voiceDemoPageResponse(
               <div class="chat-card ticket-card">
                 <p class="eyebrow">Support ticket opened</p>
                 <p class="ticket-title" id="handoff-category">Support ticket opened</p>
-                <p class="ticket-copy" id="handoff-description">A support ticket was opened for the email you shared. The team will follow up there.</p>
+                <p class="ticket-copy" id="handoff-description">A support ticket was opened under your store account. The team will follow up by email.</p>
                 <dl>
                   <div><dt>Reference</dt><dd id="handoff-reference">—</dd></div>
                   <div><dt>Status</dt><dd id="handoff-status">Open</dd></div>

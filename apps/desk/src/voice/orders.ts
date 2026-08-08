@@ -60,6 +60,30 @@ export function findOrderNumber(messages: ConversationMessage[]): string | null 
   return null
 }
 
+type CustomerOrderOverview = {
+  name: string
+  fulfillmentStatus: string | null
+  financialStatus: string | null
+  tracking: { number: string | null }[]
+}
+
+/**
+ * A compact spoken-friendly overview of the signed-in customer's recent
+ * orders, used by the deterministic continuation after sign-in.
+ */
+export function ordersOverviewReply(orders: CustomerOrderOverview[]): string {
+  if (orders.length === 0) {
+    return 'I could not find any orders on your store account. If the order was placed with a different email, share its order number and I can check it.'
+  }
+  const lines = orders.slice(0, 5).map((order) => {
+    const status = order.fulfillmentStatus?.toLowerCase().replace(/_/g, ' ') ?? order.financialStatus?.toLowerCase() ?? null
+    const tracking = order.tracking.map((entry) => entry.number).filter((value): value is string => value !== null)
+    return `${order.name}${status ? ` — ${status}` : ''}${tracking.length > 0 ? `, tracking ${tracking.join(', ')}` : ''}`
+  })
+  if (lines.length === 1) return `I found your order ${lines[0]}. Is this the one you mean?`
+  return `Here are your recent orders: ${lines.join('; ')}. Which one do you mean?`
+}
+
 export function orderStatusReply(result: OrderStatusToolResult): string {
   if (result.status === 'not_found') {
     return 'I could not find that order for the email on this session. Double-check the order number, or start over with the email used at checkout. I can also open a support ticket for the team.'
