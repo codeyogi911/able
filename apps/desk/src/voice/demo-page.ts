@@ -67,11 +67,19 @@ function monogram(displayName: string): string {
   return (letters || 'S').toUpperCase()
 }
 
+export type VoiceIdentityView = {
+  /** True when Shopify customer sign-in is configured for this deployment. */
+  configured: boolean
+  /** The signed-in customer's display name, or null when anonymous. */
+  customerName: string | null
+}
+
 export function voiceDemoPageResponse(
   branding: VoiceBranding,
   turnstileSiteKey = '',
   ordersEnabled = false,
   topics: VoiceHelpTopic[] = [],
+  identity: VoiceIdentityView = { configured: false, customerName: null },
 ): Response {
   const title = /\bsupport$/i.test(branding.displayName.trim())
     ? `${branding.displayName} — assistant`
@@ -126,7 +134,11 @@ export function voiceDemoPageResponse(
           </a>
           <div class="header-actions">
             <nav class="support-nav" aria-label="Support options">
-              <a href="/kb">Browse help</a>
+              <a href="/kb">Browse help</a>${identity.customerName
+                ? `\n              <span class="signed-in-as">${escapeText(identity.customerName)}</span>\n              <a href="/auth/shopify/logout">Sign out</a>`
+                : identity.configured
+                  ? '\n              <a href="/auth/shopify/start">Sign in for order help</a>'
+                  : ''}
             </nav>
             <button id="clear-button" class="text-button" type="button" hidden disabled>Start over</button>
           </div>

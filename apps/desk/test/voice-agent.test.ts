@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { HUMAN_HELP_MESSAGE } from '../src/voice/escalation'
 import { ORDER_LOOKUP_CONTACT_CONTINUATION } from '../src/voice/contact'
+import { SHOPIFY_CUSTOMER_SESSION_COOKIE, signShopifyCustomerSession } from '../src/identity/shopify-customer'
 
 type TestAgentEnv = typeof env & { AbleDeskAgent: DurableObjectNamespace }
 
@@ -21,7 +22,7 @@ function nextMessage(socket: WebSocket, predicate: (value: Record<string, unknow
   })
 }
 
-async function connectAgent(name: string, origin = 'http://localhost'): Promise<WebSocket> {
+async function connectAgent(name: string, origin = 'http://localhost', cookie?: string): Promise<WebSocket> {
   const namespace = (env as TestAgentEnv).AbleDeskAgent
   const stub = namespace.get(namespace.idFromName(name))
   // Every real connection carries a client IP and the public rate limits key
@@ -29,7 +30,11 @@ async function connectAgent(name: string, origin = 'http://localhost'): Promise<
   // rate-limit budget as the suite grows.
   const bytes = crypto.getRandomValues(new Uint8Array(3))
   const response = await stub.fetch(new Request(`${origin}/agents/able-desk-agent/${name}`, {
-    headers: { upgrade: 'websocket', 'CF-Connecting-IP': `10.${bytes[0]}.${bytes[1]}.${bytes[2]}` },
+    headers: {
+      upgrade: 'websocket',
+      'CF-Connecting-IP': `10.${bytes[0]}.${bytes[1]}.${bytes[2]}`,
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
   }))
   expect(response.status).toBe(101)
   const socket = response.webSocket
@@ -223,6 +228,61 @@ describe('voice agent WebSocket boundary', () => {
       expect(String(message.text)).not.toMatch(/only help with support|add your name/i)
     } finally {
       second.close()
+    }
+  })
+
+  it('treats a store-account session as verified contact and never shows the card', async () => {
+    const token = await signShopifyCustomerSession('able-local-capability-secret-not-for-production', {
+      name: 'Signed In Customer',
+      email: 'signed-in@example.test',
+      accessToken: 'shcat-test-token',
+      expiresAt: Date.now() + 60_000,
+    })
+    const socket = await connectAgent(
+      `shopify-session-${crypto.randomUUID()}`,
+      'http://localhost',
+      `${SHOPIFY_CUSTOMER_SESSION_COOKIE}=${token}`,
+    )
+    try {
+      await proveSession(socket)
+      let cardShown = false
+      socket.addEventListener('message', (event) => {
+        if (typeof event.data === 'string' && JSON.parse(event.data).type === 'voice_contact_required') cardShown = true
+      })
+      // A bare order number from a signed-in caller goes straight to lookup
+      // under the verified email — no contact card, no guardrail.
+      const reply = nextMessage(socket, (message) => message.type === 'transcript_end')
+      socket.send(JSON.stringify({ type: 'text_message', text: '#2026-27/7903' }))
+      const message = await reply
+      expect(String(message.text)).toContain('trouble checking orders')
+      expect(String(message.text)).not.toMatch(/card below|only help with support/i)
+      expect(cardShown).toBe(false)
+    } finally {
+      socket.close()
+    }
+  })
+
+  it('ignores a tampered store-account session token', async () => {
+    const token = await signShopifyCustomerSession('able-local-capability-secret-not-for-production', {
+      name: 'Tampered Customer',
+      email: 'tampered@example.test',
+      accessToken: 'shcat-test-token',
+      expiresAt: Date.now() + 60_000,
+    })
+    const socket = await connectAgent(
+      `shopify-tampered-${crypto.randomUUID()}`,
+      'http://localhost',
+      `${SHOPIFY_CUSTOMER_SESSION_COOKIE}=${token}TAMPERED`,
+    )
+    try {
+      await proveSession(socket)
+      // Without a valid session the bare number behaves anonymously: the
+      // contact card is requested once.
+      const cardRequested = nextMessage(socket, (message) => message.type === 'voice_contact_required')
+      socket.send(JSON.stringify({ type: 'text_message', text: '#2026-27/7903' }))
+      await expect(cardRequested).resolves.toMatchObject({ reason: 'order_lookup' })
+    } finally {
+      socket.close()
     }
   })
 

@@ -268,6 +268,27 @@ try {
   assertNoRepeatedSentence(outageReply, 'order outage reply')
   console.log(`PASS order_lookup_unavailable: ${outageReply}`)
 
+  // A signed-in store customer asking about "my order" without a number is
+  // served from list_my_orders — never asked to type the order number first.
+  const signedInOrder = await turn(
+    [{ role: 'user', content: 'Where is my order?' }],
+    { fixtures: [orderFixture] },
+    { signedIn: true, stream: true },
+  )
+  const signedInReply = String(signedInOrder.text ?? '')
+  const signedInTools = Array.isArray(signedInOrder.toolCalls) ? signedInOrder.toolCalls : []
+  assert(
+    signedInTools.some((call) => call?.name === 'list_my_orders'),
+    `signed-in order question must call list_my_orders: ${JSON.stringify(signedInOrder)}`,
+  )
+  assert(/4021/.test(signedInReply), `signed-in reply should reference the caller's order: ${signedInReply}`)
+  assert(
+    !/what is the order number|order number from your confirmation/i.test(signedInReply),
+    `signed-in caller must not be asked for the number first: ${signedInReply}`,
+  )
+  assertNoRepeatedSentence(signedInReply, 'signed-in order reply')
+  console.log(`PASS signed_in_order_list: ${signedInReply}`)
+
   // Knowledge-grounded answering: the assistant must consult the help centre
   // and answer strictly from article content.
   const kbArticle = {

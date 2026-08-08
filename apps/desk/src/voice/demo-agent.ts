@@ -51,9 +51,25 @@ import {
   type VoiceVerificationChallenge,
 } from './verification'
 import { dedupAssistantText } from './dedup'
+import {
+  SHOPIFY_CUSTOMER_SESSION_COOKIE,
+  shopifyCustomerConfigured,
+  shopifyCustomerContext,
+  verifyShopifyCustomerSession,
+  type ShopifyCustomerSession,
+} from '../identity/shopify-customer'
 
 const VoiceAgent = withVoice(Agent, { historyLimit: 16, maxMessageCount: 80 })
 const LOCAL_SECRET = 'able-local-capability-secret-not-for-production'
+
+function readShopifyCustomerCookie(request: Request): string | null {
+  const header = request.headers.get('Cookie') ?? ''
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=')
+    if (key === SHOPIFY_CUSTOMER_SESSION_COOKIE) return rest.join('=') || null
+  }
+  return null
+}
 
 type VoiceConnectionState = {
   clientIp?: string
@@ -61,6 +77,12 @@ type VoiceConnectionState = {
   origin?: string
   /** True after this connection passed the Turnstile session check. */
   sessionProofPassed?: boolean
+  /**
+   * The raw signed Shopify customer-session token presented on the WebSocket
+   * upgrade. Verified lazily per use; the cookie re-arrives on every
+   * reconnect, so verified identity survives connection drops by transport.
+   */
+  shopifyCustomerToken?: string | null
 }
 
 /**
@@ -127,7 +149,15 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       clientIp: context.request.headers.get('CF-Connecting-IP') ?? 'unknown',
       hostname: url.hostname,
       origin: url.origin,
+      shopifyCustomerToken: readShopifyCustomerCookie(context.request),
     } satisfies VoiceConnectionState)
+  }
+
+  /** The verified store-account identity on this connection, if any. */
+  async #shopifyCustomer(connection: Connection): Promise<ShopifyCustomerSession | null> {
+    const state = connectionState(connection)
+    if (!state.shopifyCustomerToken || !shopifyCustomerConfigured(this.env)) return null
+    return verifyShopifyCustomerSession(this.#secret(state), state.shopifyCustomerToken)
   }
 
   beforeCallStart(connection: Connection): boolean {
@@ -247,7 +277,15 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     }
 
     const session = await this.#session()
-    const contact = hasVoiceContact(session) ? session.contact : null
+    const shopifyCustomer = await this.#shopifyCustomer(context.connection)
+    // A store-account sign-in IS contact on file — verified, with no card
+    // interruption. An explicitly shared contact still takes precedence so a
+    // caller can direct follow-up to a different address.
+    const contact = hasVoiceContact(session)
+      ? session.contact
+      : shopifyCustomer
+        ? { name: shopifyCustomer.name, email: shopifyCustomer.email }
+        : null
     const turnRequestId = `voice-turn-${crypto.randomUUID()}`
     const messages = context.messages.map(({ role, content }) => ({ role, content }))
     const classifiedCategory = classifyEscalation(transcript)
@@ -327,6 +365,7 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       system: voiceAgentSystemPrompt(workspaceShortName(settings.displayName), {
         orders: ordersAvailable,
         contact: contact !== null,
+        signedIn: shopifyCustomer !== null,
       }),
       messages: prepareVoiceModelMessages(messages),
       tools: {
@@ -355,6 +394,16 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
             }
           },
         }),
+        ...(shopifyCustomer ? {
+          list_my_orders: tool({
+            description: "List the signed-in caller's most recent orders: names, dates, payment and fulfillment status, totals, and tracking. Use when they ask about an order without giving a number, then confirm which order they mean. Returns only the signed-in caller's own orders.",
+            inputSchema: z.object({}),
+            execute: async () => {
+              const result = await shopifyCustomerContext(this.env, shopifyCustomer.accessToken, {})
+              return result.status === 'ok' ? { status: 'ok', orders: result.customer.orders } : { status: 'unavailable' }
+            },
+          }),
+        } : {}),
         ...(ordersEnabled ? {
           get_order_status: tool({
             description: "Look up one order by the caller's order number. The server matches the number together with this session's contact email and returns not_found unless both match; it never reveals whether a number exists for a different email.",

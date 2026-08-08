@@ -45,6 +45,9 @@
       },
       "WHATSAPP_WABA_ID": {
         "description": "The WhatsApp Business Account ID accepted by this deployment's webhook."
+      },
+      "SHOPIFY_CUSTOMER_CLIENT_ID": {
+        "description": "Optional Customer Account API public client ID enabling store-account sign-in on the support portal."
       }
     }
   },

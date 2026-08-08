@@ -9,7 +9,7 @@
   "assets": {
     "binding": "ASSETS",
     "directory": "./public",
-    "run_worker_first": ["/", "/healthz", "/mcp", "/ops", "/ops/*", "/webhooks/whatsapp", "/kb*", "/requests*", "/workspace-theme.css", "/portal/*", "/voice", "/demo/voice", "/agents/*"]
+    "run_worker_first": ["/", "/healthz", "/mcp", "/ops", "/ops/*", "/webhooks/whatsapp", "/kb*", "/requests*", "/workspace-theme.css", "/portal/*", "/voice", "/demo/voice", "/agents/*", "/auth/*"]
   },
   "vars": {
     "ABLE_VOICE_DEMO_ENABLED": "1"
