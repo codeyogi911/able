@@ -686,7 +686,7 @@ function sendMessage(message: string): boolean {
 function focusSupportRequest(): void {
   if (!isReady()) return
   elements.landingInput.placeholder = 'Briefly describe what you need help with'
-  elements.landingStatus.textContent = 'Describe the issue first. Ava will ask for email only if a private request is needed.'
+  elements.landingStatus.textContent = 'Describe the issue first. Ava will ask you to sign in only if a private request is needed.'
   elements.landingInput.focus()
 }
 
