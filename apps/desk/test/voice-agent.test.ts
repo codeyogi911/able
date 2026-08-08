@@ -24,8 +24,12 @@ function nextMessage(socket: WebSocket, predicate: (value: Record<string, unknow
 async function connectAgent(name: string, origin = 'http://localhost'): Promise<WebSocket> {
   const namespace = (env as TestAgentEnv).AbleDeskAgent
   const stub = namespace.get(namespace.idFromName(name))
+  // Every real connection carries a client IP and the public rate limits key
+  // on it. A unique IP per connection keeps tests from draining one shared
+  // rate-limit budget as the suite grows.
+  const bytes = crypto.getRandomValues(new Uint8Array(3))
   const response = await stub.fetch(new Request(`${origin}/agents/able-desk-agent/${name}`, {
-    headers: { upgrade: 'websocket' },
+    headers: { upgrade: 'websocket', 'CF-Connecting-IP': `10.${bytes[0]}.${bytes[1]}.${bytes[2]}` },
   }))
   expect(response.status).toBe(101)
   const socket = response.webSocket
@@ -178,6 +182,59 @@ describe('voice agent WebSocket boundary', () => {
       const result = await lookupReply
       expect(result).toMatchObject({ text: 'What is the order number from your confirmation email?' })
       expect(String(result.text)).not.toMatch(/add your name|email.*card/i)
+
+      // The customer answers with nothing but the order number — that is the
+      // order flow, never the model's topic guardrail.
+      const numberReply = nextMessage(socket, (message) => message.type === 'transcript_end')
+      socket.send(JSON.stringify({ type: 'text_message', text: '2026-27/7903.' }))
+      expect(String((await numberReply).text)).toContain('trouble checking orders')
+    } finally {
+      socket.close()
+    }
+  })
+
+  it('resumes contact and the order flow across a dropped connection', async () => {
+    // Mobile browsers routinely drop the WebSocket mid-flow; the session agent
+    // must keep the contact and pending order lookup for the reconnect.
+    const name = `order-reconnect-${crypto.randomUUID()}`
+    const first = await connectAgent(name)
+    try {
+      await proveSession(first)
+      const cardRequested = nextMessage(first, (message) => message.type === 'voice_contact_required')
+      first.send(JSON.stringify({ type: 'text_message', text: 'My delivery is delayed.' }))
+      await expect(cardRequested).resolves.toMatchObject({ anchor: 'after_reply', reason: 'order_lookup' })
+
+      const contactSet = nextMessage(first, (message) => message.type === 'voice_contact_set')
+      first.send(JSON.stringify({ type: 'set_voice_contact', name: 'Radha Tester', email: 'radha@example.test' }))
+      await expect(contactSet).resolves.toMatchObject({ continuation: 'order_lookup' })
+    } finally {
+      first.close()
+    }
+
+    const second = await connectAgent(name)
+    try {
+      await proveSession(second)
+      const reply = nextMessage(second, (message) => message.type === 'transcript_end')
+      second.send(JSON.stringify({ type: 'text_message', text: '#2026-27/7903' }))
+      const message = await reply
+      // The stored contact answers the lookup directly: no re-asking for the
+      // card, no off-topic refusal.
+      expect(String(message.text)).toContain('trouble checking orders')
+      expect(String(message.text)).not.toMatch(/only help with support|add your name/i)
+    } finally {
+      second.close()
+    }
+  })
+
+  it('asks for contact once when a bare order number arrives with nobody on file', async () => {
+    const socket = await connectAgent(`bare-number-${crypto.randomUUID()}`)
+    try {
+      await proveSession(socket)
+      const cardRequested = nextMessage(socket, (message) => message.type === 'voice_contact_required')
+      const reply = nextMessage(socket, (message) => message.type === 'transcript_end')
+      socket.send(JSON.stringify({ type: 'text_message', text: '#2026-27/7903' }))
+      await expect(cardRequested).resolves.toMatchObject({ reason: 'order_lookup' })
+      expect(String((await reply).text)).toContain('To look up order #2026-27/7903')
     } finally {
       socket.close()
     }

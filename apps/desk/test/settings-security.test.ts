@@ -115,6 +115,41 @@ describe('Turnstile public-write binding', () => {
     expect(verified).toHaveBeenCalledOnce()
   })
 
+  it('honours the documented testing secret on the local surface only', async () => {
+    // Cloudflare's dummy siteverify responses omit the action and hostname
+    // claims, so the testing secret is accepted without claim checks — but
+    // only for local development requests. Production hostnames keep strict
+    // claim verification even when a testing secret is configured.
+    const testingSecret = '1x0000000000000000000000000000000AA'
+    const dummyResponse = () => vi.fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ success: true, hostname: 'example.com' }))
+
+    await expect(verifyTurnstileProof({
+      token: 'any-token',
+      action: 'voice_session',
+      ip: 'unknown',
+      hostname: 'localhost',
+      local: true,
+    }, publicEnv(testingSecret), dummyResponse())).resolves.toEqual({ ok: true })
+
+    await expect(verifyTurnstileProof({
+      token: 'any-token',
+      action: 'voice_session',
+      ip: 'unknown',
+      hostname: 'support.example.test',
+      local: false,
+    }, publicEnv(testingSecret), dummyResponse())).resolves.toEqual({ ok: false, reason: 'turnstile_action_mismatch' })
+
+    // A real secret keeps strict claim checks even on the local surface.
+    await expect(verifyTurnstileProof({
+      token: 'any-token',
+      action: 'voice_session',
+      ip: 'unknown',
+      hostname: 'localhost',
+      local: true,
+    }, publicEnv('real-production-secret'), dummyResponse())).resolves.toEqual({ ok: false, reason: 'turnstile_action_mismatch' })
+  })
+
   it('accepts opaque browser origins only with same-origin fetch metadata', async () => {
     const verified = vi.fn<typeof fetch>()
       .mockResolvedValue(Response.json({ success: true, action: 'intake', hostname: 'support.example.test' }))

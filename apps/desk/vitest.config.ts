@@ -11,6 +11,13 @@ export default defineConfig({
       wrangler: { configPath: './wrangler.test.jsonc' },
       miniflare: {
         bindings: {
+          // The pool loads a developer's local .dev.vars from the Wrangler
+          // config directory. Tests assume these values are absent, so pin
+          // them to empty strings — every gate treats '' as unconfigured —
+          // to keep the suite hermetic regardless of local dev setup.
+          TURNSTILE_SECRET_KEY: '',
+          TURNSTILE_SITE_KEY: '',
+          CUSTOMER_CAPABILITY_SECRET: '',
           ABLE_DEV_EMAIL: 'owner@example.com',
           ABLE_OPERATOR_HOSTNAME: 'operators.example.test',
           SHOPIFY_SHOP_DOMAIN: 'shop.example.test',

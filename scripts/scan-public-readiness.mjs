@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import { execFile } from 'node:child_process'
 import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { promisify } from 'node:util'
 
 const root = process.cwd()
 const ignoredDirectories = new Set(['.git', '.wrangler', 'node_modules', 'dist', 'coverage', 'playwright-report', 'test-results'])
@@ -28,6 +30,26 @@ async function walk(directory) {
   return files
 }
 
+/**
+ * The publication risk is what git would include: tracked files plus
+ * untracked files not covered by .gitignore. Properly ignored local state —
+ * .dev.vars, local databases — cannot reach the public repository and must
+ * not fail the scan on a developer machine. Outside a git checkout, fall
+ * back to scanning the whole tree.
+ */
+async function publishableFiles() {
+  try {
+    const { stdout } = await promisify(execFile)(
+      'git',
+      ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+      { cwd: root, maxBuffer: 64 * 1024 * 1024 },
+    )
+    return stdout.split('\0').filter(Boolean).map((rel) => path.join(root, rel))
+  } catch {
+    return walk(root)
+  }
+}
+
 function relative(filename) {
   return path.relative(root, filename).split(path.sep).join('/')
 }
@@ -51,7 +73,7 @@ for (const requiredFile of required) {
   }
 }
 
-for (const filename of await walk(root)) {
+for (const filename of await publishableFiles()) {
   const rel = relative(filename)
   if (ignoredFiles.has(rel)) continue
   if (forbiddenNames.some((pattern) => pattern.test(path.basename(filename)))) {
@@ -59,7 +81,13 @@ for (const filename of await walk(root)) {
     continue
   }
   if (!textExtensions.has(path.extname(filename).toLowerCase())) continue
-  const data = await readFile(filename)
+  let data
+  try {
+    data = await readFile(filename)
+  } catch {
+    // Listed but no longer on disk (e.g. staged deletion) — nothing to scan.
+    continue
+  }
   if (data.includes(0)) continue
   const text = data.toString('utf8')
   const lowered = text.toLowerCase()
