@@ -30,6 +30,20 @@ function normalizedHostname(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, '')
 }
 
+// Cloudflare's documented Turnstile testing secret keys accept or reject every
+// token, but their siteverify responses do not echo the action or hostname
+// claims, so the strict claim checks would fail every proof and leave the
+// widget flow untestable outside production. On the local development surface
+// only, a successful verification under a documented testing secret is
+// accepted without claim checks. Non-local surfaces keep strict verification
+// even when a testing secret is configured, so a production misconfiguration
+// still fails closed.
+const TURNSTILE_TESTING_SECRETS = new Set([
+  '1x0000000000000000000000000000000AA',
+  '2x0000000000000000000000000000000AA',
+  '3x0000000000000000000000000000000AA',
+])
+
 export async function verifyTurnstileProof(
   input: {
     token: string | null | undefined
@@ -58,6 +72,7 @@ export async function verifyTurnstileProof(
     return { ok: false, reason: 'turnstile_unavailable' }
   }
   if (!result.success) return { ok: false, reason: result['error-codes']?.[0] ?? 'turnstile_failed' }
+  if (input.local && TURNSTILE_TESTING_SECRETS.has(env.TURNSTILE_SECRET_KEY)) return { ok: true }
   if (result.action !== input.action) return { ok: false, reason: 'turnstile_action_mismatch' }
   if (!result.hostname || normalizedHostname(result.hostname) !== normalizedHostname(input.hostname)) {
     return { ok: false, reason: 'turnstile_hostname_mismatch' }

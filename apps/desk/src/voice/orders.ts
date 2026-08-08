@@ -16,11 +16,35 @@ export type OrderStatusToolResult =
 
 type ConversationMessage = { role: 'user' | 'assistant'; content: string }
 
-const ORDER_LOOKUP_REQUEST = /(?:\b(?:where|track|tracking|status|shipped|delivery|arrive|arrival)\b.{0,60}\border\b|\border\b.{0,60}\b(?:where|track|tracking|status|shipped|delivery|arrive|arrival)\b)/i
-const ORDER_NUMBER = /(?:\border(?:\s+(?:number|no\.?))?\s*[:#-]?\s*((?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{1,31})\b|#((?=[A-Z0-9-]*\d)[A-Z0-9][A-Z0-9-]{1,31})\b)/i
+// Customers rarely say "order" when they chase a shipment — "my delivery is
+// delayed" and "where is my package" are the common phrasings — so the
+// deterministic intake matches any shipment noun near a tracking signal.
+const ORDER_LOOKUP_NOUN = '(?:order|delivery|package|parcel|shipment)'
+const ORDER_LOOKUP_SIGNAL = '(?:where|track|tracking|status|ship(?:s|ped|ping)?|deliver(?:y|ed|ing)?|arrive(?:s|d)?|arrival|late|delay(?:s|ed)?|missing|stuck|lost)'
+const ORDER_LOOKUP_REQUEST = new RegExp(
+  `\\b${ORDER_LOOKUP_NOUN}\\b.{0,60}\\b${ORDER_LOOKUP_SIGNAL}\\b|\\b${ORDER_LOOKUP_SIGNAL}\\b.{0,60}\\b${ORDER_LOOKUP_NOUN}\\b`,
+  'i',
+)
+// Order names may carry store-configured prefixes and separators, including
+// fiscal-year formats such as "#2026-27/7903", so "/" is part of the value.
+const ORDER_NUMBER = /(?:\border(?:\s+(?:number|no\.?))?\s*[:#-]?\s*((?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,31})\b|#((?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,31})\b)/i
+// A message that is nothing but an order number, as customers reply after
+// being asked for one. The token must contain a digit; trailing sentence
+// punctuation is tolerated.
+const BARE_ORDER_NUMBER = /^#?((?=[A-Z0-9/-]*\d)[A-Z0-9][A-Z0-9/-]{1,31})[.!?]?$/i
 
 export function isOrderLookupRequest(message: string): boolean {
   return ORDER_LOOKUP_REQUEST.test(message)
+}
+
+/**
+ * The order number when the whole message is one, e.g. "#2026-27/7903" or
+ * "2026-27/7903." typed in answer to "what is the order number?" — otherwise
+ * null. Normalized to the "#"-prefixed uppercase form used for lookup.
+ */
+export function bareOrderNumber(message: string): string | null {
+  const match = BARE_ORDER_NUMBER.exec(message.trim())
+  return match?.[1] ? `#${match[1].toUpperCase()}` : null
 }
 
 export function findOrderNumber(messages: ConversationMessage[]): string | null {
@@ -30,6 +54,8 @@ export function findOrderNumber(messages: ConversationMessage[]): string | null 
     const match = ORDER_NUMBER.exec(message.content)
     const value = match?.[1] ?? match?.[2]
     if (value) return `#${value.replace(/^#/, '').toUpperCase()}`
+    const bare = bareOrderNumber(message.content)
+    if (bare) return bare
   }
   return null
 }

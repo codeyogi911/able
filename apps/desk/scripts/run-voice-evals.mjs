@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 
 const port = Number(process.env.VOICE_EVAL_PORT ?? 8794)
 if (!Number.isInteger(port) || port < 1024 || port > 65_535) throw new Error('VOICE_EVAL_PORT must be an unprivileged TCP port')
@@ -57,8 +59,14 @@ function assertNoRepeatedSentence(reply, label) {
   }
 }
 
+// npm workspaces may hoist wrangler to the repository root, so resolve the
+// package instead of assuming a workspace-local node_modules path. The bin
+// entry is not in wrangler's export map, so locate it from the package root.
+const require = createRequire(import.meta.url)
+const wranglerEntry = join(dirname(require.resolve('wrangler/package.json')), 'bin', 'wrangler.js')
+
 const worker = spawn(process.execPath, [
-  'node_modules/wrangler/bin/wrangler.js',
+  wranglerEntry,
   'dev',
   '--config',
   'wrangler.voice-eval.jsonc',

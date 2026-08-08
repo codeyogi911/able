@@ -6,6 +6,7 @@ import {
   shopifyConfigured,
 } from '../src/integrations/shopify'
 import {
+  bareOrderNumber,
   findOrderNumber,
   isOrderLookupRequest,
   orderStatusForSession,
@@ -164,6 +165,40 @@ describe('deterministic voice order continuation', () => {
       { role: 'assistant', content: 'Add your email in the card below.' },
       { role: 'user', content: 'I have shared my name and email.' },
     ])).toBe('#SO-4021')
+  })
+
+  it('accepts fiscal-year order names containing a slash', () => {
+    // Stores can configure order name formats such as "#2026-27/7903".
+    expect(findOrderNumber([{ role: 'user', content: '#2026-27/7903' }])).toBe('#2026-27/7903')
+    expect(findOrderNumber([{ role: 'user', content: 'order number 2026-27/7903' }])).toBe('#2026-27/7903')
+    expect(findOrderNumber([{ role: 'user', content: 'My order no. 2026-27/7903 is late' }])).toBe('#2026-27/7903')
+  })
+
+  it('recognizes delivery phrasings that never say "order"', () => {
+    expect(isOrderLookupRequest('My delivery is delayed.')).toBe(true)
+    expect(isOrderLookupRequest('Where is my package?')).toBe(true)
+    expect(isOrderLookupRequest("My parcel hasn't arrived")).toBe(true)
+    expect(isOrderLookupRequest('When will my shipment ship?')).toBe(true)
+    expect(isOrderLookupRequest('The tracking says my package is stuck')).toBe(true)
+    expect(isOrderLookupRequest('How do I return a package?')).toBe(false)
+    expect(isOrderLookupRequest('My grinder is broken')).toBe(false)
+  })
+
+  it('treats a message that is only an order number as one', () => {
+    expect(bareOrderNumber('#2026-27/7903')).toBe('#2026-27/7903')
+    expect(bareOrderNumber('  2026-27/7903. ')).toBe('#2026-27/7903')
+    expect(bareOrderNumber('so-4021')).toBe('#SO-4021')
+    expect(bareOrderNumber('Where is order #4021?')).toBeNull()
+    expect(bareOrderNumber('thanks')).toBeNull()
+    expect(bareOrderNumber('')).toBeNull()
+  })
+
+  it('finds a bare order number earlier in the conversation', () => {
+    expect(findOrderNumber([
+      { role: 'user', content: '2026-27/7903' },
+      { role: 'assistant', content: 'Add your email in the card below.' },
+      { role: 'user', content: 'I have shared my name and email.' },
+    ])).toBe('#2026-27/7903')
   })
 
   it('renders provider results without asking for contact details again', () => {
