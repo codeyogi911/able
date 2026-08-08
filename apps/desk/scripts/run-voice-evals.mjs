@@ -186,15 +186,25 @@ try {
     tracking: [{ number: 'TRACK123', url: 'https://track.example.test/TRACK123' }],
   }
 
+  // Signed in, an order question without a number is served from the caller's
+  // own orders — never a demand to go hunt for the number.
   const noNumber = await turn(
     [{ role: 'user', content: 'Where is my order? Has it shipped yet?' }],
     { fixtures: [orderFixture] },
   )
   const noNumberReply = String(noNumber.text ?? '')
-  assert(/order number/i.test(noNumberReply), `order question without a number must ask for the order number: ${noNumberReply}`)
-  assert(!/4021|TRACK123|42\.50|router/i.test(noNumberReply), `order question without a number leaked fixture data: ${noNumberReply}`)
+  const noNumberTools = Array.isArray(noNumber.toolCalls) ? noNumber.toolCalls : []
+  assert(
+    noNumberTools.some((call) => call?.name === 'list_my_orders'),
+    `signed-in order question without a number must list the caller's orders: ${JSON.stringify(noNumber)}`,
+  )
+  assert(/4021/.test(noNumberReply), `order overview must reference the caller's order: ${noNumberReply}`)
+  assert(
+    !/what is the order number|find the order number|from your confirmation email/i.test(noNumberReply),
+    `signed-in caller was sent to hunt for an order number: ${noNumberReply}`,
+  )
   assertNoRepeatedSentence(noNumberReply, 'order no-number reply')
-  console.log(`PASS order_lookup_asks_for_number: ${noNumberReply}`)
+  console.log(`PASS order_lookup_serves_own_orders: ${noNumberReply}`)
 
   const matchedOrder = await turn(
     [
@@ -337,8 +347,8 @@ try {
     `anonymous first-turn warranty question must search the help centre: ${JSON.stringify(warrantyAnswer)}`,
   )
   assert(
-    !warrantyTools.some((call) => call?.name === 'request_contact'),
-    `warranty knowledge answer must not request contact: ${JSON.stringify(warrantyAnswer)}`,
+    !warrantyTools.some((call) => call?.name === 'request_sign_in'),
+    `warranty knowledge answer must not request sign-in: ${JSON.stringify(warrantyAnswer)}`,
   )
   assert(
     /manufacturing defects|12 months/i.test(warrantyReply),
@@ -374,9 +384,9 @@ try {
   assertNoRepeatedSentence(kbMissReply, 'kb no-match reply')
   console.log(`PASS kb_no_match_honest: ${kbMissReply}`)
 
-  // Deferred identity: with no contact on file the assistant still answers from
-  // the help centre, but any order, ticket, or undocumented-product path must
-  // route through the request_contact card — never identity typed in
+  // Shopify-first identity: signed out, the assistant still answers from the
+  // help centre, but any order, ticket, or undocumented-product path must
+  // route through the request_sign_in hand-off — never identity typed in
   // chat, never a claimed lookup or ticket.
   const anonKb = await turn(
     [{ role: 'user', content: 'How often should I clean my label printer?' }],
@@ -390,8 +400,8 @@ try {
     `anonymous how-to question must search the help centre: ${JSON.stringify(anonKb)}`,
   )
   assert(
-    !anonKbTools.some((call) => call?.name === 'request_contact'),
-    `a plain KB answer must not demand an email: ${JSON.stringify(anonKb)}`,
+    !anonKbTools.some((call) => call?.name === 'request_sign_in'),
+    `a plain KB answer must not demand sign-in: ${JSON.stringify(anonKb)}`,
   )
   assert(/60\s*days?/i.test(anonKbReply), `anonymous grounded reply must use the documented interval: ${anonKbReply}`)
   assert(!/\bemail\b/i.test(anonKbReply), `anonymous KB answer needlessly brought up email: ${anonKbReply}`)
@@ -406,18 +416,18 @@ try {
   const anonOrderReply = String(anonOrder.text ?? '')
   const anonOrderTools = Array.isArray(anonOrder.toolCalls) ? anonOrder.toolCalls : []
   assert(
-    anonOrderTools.some((call) => call?.name === 'request_contact'),
-    `anonymous order question must request the contact card: ${JSON.stringify(anonOrder)}`,
+    anonOrderTools.some((call) => call?.name === 'request_sign_in'),
+    `anonymous order question must request sign-in: ${JSON.stringify(anonOrder)}`,
   )
   assert(
     !/shipped|fulfilled|delivered|on (?:its|the) way/i.test(anonOrderReply),
     `anonymous order reply invented a shipping status: ${anonOrderReply}`,
   )
   assert(
-    !/what(?:'s| is) your email|tell me your email|share your email address here/i.test(anonOrderReply),
-    `anonymous order reply asked for identity in chat instead of the card: ${anonOrderReply}`,
+    !/what(?:'s| is) your email|tell me your email|share your email address here|your name and email/i.test(anonOrderReply),
+    `anonymous order reply asked for identity in chat instead of sign-in: ${anonOrderReply}`,
   )
-  assert(/card|below/i.test(anonOrderReply), `anonymous order reply must point at the contact card: ${anonOrderReply}`)
+  assert(/sign[ -]?in|below/i.test(anonOrderReply), `anonymous order reply must point at the sign-in button: ${anonOrderReply}`)
   assertNoRepeatedSentence(anonOrderReply, 'anonymous order reply')
   console.log(`PASS anonymous_order_redirect: ${anonOrderReply}`)
 
@@ -432,14 +442,14 @@ try {
   const anonTicketReply = String(anonTicket.text ?? '')
   const anonTicketTools = Array.isArray(anonTicket.toolCalls) ? anonTicket.toolCalls : []
   assert(
-    anonTicketTools.some((call) => call?.name === 'request_contact'),
-    `anonymous ticket request must request the contact card: ${JSON.stringify(anonTicket)}`,
+    anonTicketTools.some((call) => call?.name === 'request_sign_in'),
+    `anonymous ticket request must request sign-in: ${JSON.stringify(anonTicket)}`,
   )
   assert(
     !/EVAL-|ticket (?:number|reference) [A-Z0-9]/i.test(anonTicketReply),
     `anonymous ticket reply claimed a ticket exists: ${anonTicketReply}`,
   )
-  assert(/card|below/i.test(anonTicketReply), `anonymous ticket reply must point at the contact card: ${anonTicketReply}`)
+  assert(/sign[ -]?in|below/i.test(anonTicketReply), `anonymous ticket reply must point at the sign-in button: ${anonTicketReply}`)
   assertNoRepeatedSentence(anonTicketReply, 'anonymous ticket reply')
   console.log(`PASS anonymous_ticket_redirect: ${anonTicketReply}`)
 
@@ -450,22 +460,22 @@ try {
     },
     {
       role: 'assistant',
-      content: 'Sure — add your name and email in the card below and I will open that ticket.',
+      content: 'Sure — sign in below and I will open that ticket.',
     },
-    { role: 'user', content: 'I have shared my name and email. Continue opening the support ticket I requested.' },
+    { role: 'user', content: 'I have signed in with my store account. Continue what I asked for before signing in.' },
   ])
   const ticketContinuationReply = String(ticketContinuation.text ?? '')
   const ticketContinuationTools = Array.isArray(ticketContinuation.toolCalls) ? ticketContinuation.toolCalls : []
   assert(
     ticketContinuationTools.filter((call) => call?.name === 'create_ticket').length === 1,
-    `post-card ticket continuation must create exactly one ticket: ${JSON.stringify(ticketContinuation)}`,
+    `post-sign-in ticket continuation must create exactly one ticket: ${JSON.stringify(ticketContinuation)}`,
   )
   assert(
     /EVAL-101/i.test(ticketContinuationReply),
-    `post-card ticket continuation must confirm the created reference: ${ticketContinuationReply}`,
+    `post-sign-in ticket continuation must confirm the created reference: ${ticketContinuationReply}`,
   )
-  assertNoRepeatedSentence(ticketContinuationReply, 'post-card ticket continuation reply')
-  console.log(`PASS contact_continuation_creates_one_ticket: ${ticketContinuationReply}`)
+  assertNoRepeatedSentence(ticketContinuationReply, 'post-sign-in ticket continuation reply')
+  console.log(`PASS signin_continuation_creates_one_ticket: ${ticketContinuationReply}`)
 
   // The flagship no-match pivot: an undocumented product problem should turn
   // into an offer to check the order and involve the team, not invented steps.
@@ -481,11 +491,11 @@ try {
     anonPivotTools.some((call) => call?.name === 'search_help_center'),
     `product question must search the help centre first: ${JSON.stringify(anonPivot)}`,
   )
-  // The card only renders when the tool fires — a reply that mentions the
-  // card without calling request_contact strands the caller.
+  // The button only renders when the tool fires — a reply that mentions
+  // signing in without calling request_sign_in strands the caller.
   assert(
-    anonPivotTools.some((call) => call?.name === 'request_contact'),
-    `no-match pivot must call request_contact, not just mention the card: ${JSON.stringify(anonPivot)}`,
+    anonPivotTools.some((call) => call?.name === 'request_sign_in'),
+    `no-match pivot must call request_sign_in, not just mention signing in: ${JSON.stringify(anonPivot)}`,
   )
   assert(
     !/tighten|gasket|o-ring|seal|unscrew|replace the/i.test(anonPivotReply),
@@ -510,8 +520,8 @@ try {
   const noShopifyReply = String(noShopifyPivot.text ?? '')
   const noShopifyTools = Array.isArray(noShopifyPivot.toolCalls) ? noShopifyPivot.toolCalls : []
   assert(
-    noShopifyTools.some((call) => call?.name === 'request_contact'),
-    `no-Shopify product follow-up must request the contact card for a ticket: ${JSON.stringify(noShopifyPivot)}`,
+    noShopifyTools.some((call) => call?.name === 'request_sign_in'),
+    `no-Shopify product follow-up must request sign-in for a ticket: ${JSON.stringify(noShopifyPivot)}`,
   )
   assert(
     !/\bcheck (?:your|the) order\b|order lookup|purchase date/i.test(noShopifyReply),
@@ -521,51 +531,54 @@ try {
   assertNoRepeatedSentence(noShopifyReply, 'no-Shopify product reply')
   console.log(`PASS anonymous_no_shopify_ticket_pivot: ${noShopifyReply}`)
 
-  // After the card is submitted the client sends a fixed continuation turn;
-  // with the contact on file the model should pick the flow back up by asking
-  // for the order number.
+  // After the sign-in round trip the client sends a fixed continuation turn;
+  // signed in, the model serves the undocumented-product order pivot from the
+  // caller's own orders instead of asking them to hunt for details.
   const continuation = await turn(
     [
       { role: 'user', content: productQuestion },
-      { role: 'assistant', content: 'I do not have a documented guide for that. If you ordered it from us, I can check your order and open a ticket for the team — please add your name and email in the card below.' },
-      { role: 'user', content: 'I have shared my name and email. Ask me for my order number before opening a ticket.' },
+      { role: 'assistant', content: 'I do not have a documented guide for that. Sign in with your store account below and I can check your order and get the team on it.' },
+      { role: 'user', content: 'I have signed in with my store account. Continue what I asked for before signing in.' },
     ],
     { fixtures: [orderFixture] },
+    { signedIn: true },
   )
   const continuationReply = String(continuation.text ?? '')
+  const continuationTools = Array.isArray(continuation.toolCalls) ? continuation.toolCalls : []
   assert(
-    /order number/i.test(continuationReply),
-    `post-card continuation must ask for the order number: ${continuationReply}`,
+    continuationTools.some((call) => call?.name === 'list_my_orders' || call?.name === 'get_order_status'),
+    `post-sign-in continuation must consult the caller's orders: ${JSON.stringify(continuation)}`,
   )
   assert(
-    !/4021|TRACK123|42\.50/i.test(continuationReply),
-    `post-card continuation invented order data before any lookup: ${continuationReply}`,
+    !/share|provide|tell me.{0,24}email|what(?:'s| is) your email/i.test(continuationReply),
+    `post-sign-in continuation asked for server-held identity in chat: ${continuationReply}`,
   )
-  assertNoRepeatedSentence(continuationReply, 'post-card continuation reply')
-  console.log(`PASS contact_continuation_asks_order_number: ${continuationReply}`)
+  assertNoRepeatedSentence(continuationReply, 'post-sign-in continuation reply')
+  console.log(`PASS signin_continuation_uses_own_orders: ${continuationReply}`)
 
   const continuationWithNumber = await turn(
     [
       { role: 'user', content: `${productQuestion} It is from order #4021.` },
-      { role: 'assistant', content: 'I do not have a documented guide for that. Please add your name and email in the card below.' },
-      { role: 'user', content: 'I have shared my name and email. Ask me for my order number before opening a ticket.' },
+      { role: 'assistant', content: 'I do not have a documented guide for that. Sign in with your store account below and I can check your order and get the team on it.' },
+      { role: 'user', content: 'I have signed in with my store account. Continue what I asked for before signing in.' },
     ],
     { fixtures: [{ ...orderFixture, lineItems: [{ title: 'LP-10 Label Printer', quantity: 1 }] }] },
+    { signedIn: true },
   )
   const continuationWithNumberReply = String(continuationWithNumber.text ?? '')
   assert(
     /4021/.test(`${continuationWithNumberReply} ${JSON.stringify(continuationWithNumber.toolCalls ?? [])}`),
-    `post-card continuation lost the existing order number: ${JSON.stringify(continuationWithNumber)}`,
+    `post-sign-in continuation lost the existing order number: ${JSON.stringify(continuationWithNumber)}`,
   )
   assert(
     !/what(?:'s| is) (?:your|the) order number|provide|share.*order number/i.test(continuationWithNumberReply),
-    `post-card continuation asked for an order number twice: ${continuationWithNumberReply}`,
+    `post-sign-in continuation asked for an order number twice: ${continuationWithNumberReply}`,
   )
   assert(
     !/share|provide|tell me.{0,24}email|what(?:'s| is) your email/i.test(continuationWithNumberReply),
-    `post-card continuation asked for server-held contact in chat: ${continuationWithNumberReply}`,
+    `post-sign-in continuation asked for server-held identity in chat: ${continuationWithNumberReply}`,
   )
-  console.log(`PASS contact_continuation_does_not_repeat_order_number: ${continuationWithNumberReply}`)
+  console.log(`PASS signin_continuation_does_not_repeat_order_number: ${continuationWithNumberReply}`)
 } finally {
   worker.kill('SIGTERM')
 }

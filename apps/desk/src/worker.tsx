@@ -203,7 +203,9 @@ async function shopifyAuthResponse(request: Request, env: Env): Promise<Response
       return authRedirect('/', [authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0)])
     }
     const maxAge = Math.max(60, Math.floor((completed.session.expiresAt - Date.now()) / 1000))
-    return authRedirect('/', [
+    // The marker lets the assistant resume the conversation that requested
+    // the sign-in; the client strips it from the URL immediately.
+    return authRedirect('/?signed_in=1', [
       authCookie(SHOPIFY_CUSTOMER_SESSION_COOKIE, completed.sessionToken, maxAge),
       authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0),
     ])

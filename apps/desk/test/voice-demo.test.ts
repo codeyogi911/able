@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  contactContinuationMessage,
-  hasVoiceContact,
-  normalizeVoiceContact,
-} from '../src/voice/contact'
+import { normalizeVoiceContact, SIGN_IN_CONTINUATION } from '../src/voice/contact'
 import { HUMAN_HELP_MESSAGE, classifyEscalation, isTicketStatusRequest } from '../src/voice/escalation'
 import {
   isVoiceDemoAgentPath,
@@ -39,14 +35,15 @@ describe('voice demo boundary', () => {
     expect(response.headers.get('content-security-policy')).toContain('worker-src blob:')
     expect(response.headers.get('content-security-policy')).toContain("img-src 'self' data: https:")
     expect(response.headers.get('permissions-policy')).toContain('microphone=(self)')
-    // The contact card parks hidden inside the transcript; identity is asked
-    // for mid-conversation, not before it.
-    expect(html).toContain('<li class="bubble-row bubble-row--assistant" id="contact-flow" hidden>')
-    expect(html).toContain('id="contact-form"')
-    expect(html).toContain('name="name"')
-    expect(html).toContain('type="email"')
+    // The sign-in card parks hidden inside the transcript; identity is the
+    // store account, asked for mid-conversation, not before it. Nothing on the
+    // page asks the customer to type a name or an email.
+    expect(html).toContain('<li class="bubble-row bubble-row--assistant" id="signin-flow" hidden>')
+    expect(html).toContain('id="signin-button"')
+    expect(html).not.toContain('id="contact-form"')
+    expect(html).not.toContain('type="email"')
     expect(html).not.toContain('type="tel"')
-    expect(html).toContain('id="contact-card-lead" class="chat-card-lead">Share support details</p>')
+    expect(html).not.toContain('autocomplete="name"')
     expect(html).toContain('id="session-turnstile"')
     expect(html).toContain('data-sitekey="turnstile-site-key"')
     expect(html).toContain('id="landing-status"')
@@ -54,7 +51,7 @@ describe('voice demo boundary', () => {
     expect(html.match(/<h1\b/g)).toHaveLength(1)
     expect(html).toContain('role="log"')
     expect(html).toContain('start a common task, or open a private support request.')
-    expect(html).toContain('Ava asks only for what she needs for email support.')
+    expect(html).toContain('Start anonymously. Ava answers from the help centre; use the support form for follow-up.')
     expect(html).toContain('id="landing-input"')
     expect(html).toContain('aria-label="Ask anything"')
     expect(html.indexOf('id="session-turnstile"')).toBeLessThan(html.indexOf('id="thread"'))
@@ -64,35 +61,33 @@ describe('voice demo boundary', () => {
     expect(html.toLowerCase()).not.toContain('otp')
   })
 
-  it('advertises order lookup only when Shopify is configured', async () => {
+  it('advertises order lookup and sign-in according to configuration', async () => {
     const ticketsOnly = await voiceDemoPageResponse(BRANDING, 'turnstile-site-key').text()
     const withOrders = await voiceDemoPageResponse(BRANDING, 'turnstile-site-key', true).text()
+    const withSignIn = await voiceDemoPageResponse(BRANDING, 'turnstile-site-key', true, [], { configured: true, customerName: null }).text()
+    const signedIn = await voiceDemoPageResponse(BRANDING, 'turnstile-site-key', true, [], { configured: true, customerName: 'Rhea Kapoor' }).text()
 
-    expect(ticketsOnly).not.toContain('an order lookup')
-    expect(ticketsOnly).toContain('for email support')
     expect(ticketsOnly).toContain('data-support-message="I want to track my order."')
     expect(ticketsOnly).toContain('Ask Ava for the available tracking steps.')
-    expect(ticketsOnly).not.toContain('href="/kb/track-your-order"')
-    expect(ticketsOnly).not.toContain('href="/kb/delayed-shipment"')
-    expect(ticketsOnly).not.toContain('href="/kb/gst-invoice"')
-    expect(ticketsOnly).not.toContain('section=warranty-and-returns')
-    expect(withOrders).toContain('for an order lookup or email support')
-    expect(withOrders).toContain('Use your checkout email and order number.')
-    expect(withOrders).toContain('data-support-message="I want to track my order."')
+    expect(ticketsOnly).not.toContain('/auth/shopify/start')
+    expect(withOrders).toContain('Share the order number and Ava will check it.')
+    expect(withSignIn).toContain('Sign in with your store account and Ava pulls it up instantly.')
+    expect(withSignIn).toContain('href="/auth/shopify/start">Sign in for order help</a>')
+    expect(signedIn).toContain('You’re signed in — Ava can pull up your recent orders.')
+    expect(signedIn).toContain('Signed in as Rhea Kapoor.')
+    expect(signedIn).toContain('href="/auth/shopify/logout">Sign out</a>')
+    expect(signedIn).not.toContain('href="/auth/shopify/start"')
   })
 
-  it('parks a hidden progressive verification card for order read-back', async () => {
-    const response = voiceDemoPageResponse(BRANDING, 'turnstile-site-key')
-    const html = await response.text()
+  it('keeps the hosted store login as the only identity step', async () => {
+    const html = await voiceDemoPageResponse(BRANDING, 'turnstile-site-key', true, [], { configured: true, customerName: null }).text()
 
-    expect(html).toContain('<li id="verify-card" class="bubble-row bubble-row--assistant" hidden>')
-    expect(html).toContain('To share order details I need to confirm this email is yours.')
-    expect(html).toContain('autocomplete="one-time-code"')
-    expect(html).toContain('id="verify-turnstile"')
-    expect(html).toContain('Email me a code')
-    // The contact step itself must not claim or require verification.
-    const contactCard = html.slice(html.indexOf('id="contact-form"'), html.indexOf('</form>'))
-    expect(contactCard.toLowerCase()).not.toContain('verif')
+    expect(html).toContain('Sign in with your store account')
+    expect(html).toContain('Sign-in happens on the store’s own secure page.')
+    expect(html.toLowerCase()).not.toContain('one-time-code')
+    expect(html.toLowerCase()).not.toContain('otp')
+    // No in-chat identity inputs of any kind.
+    expect(html).not.toContain('autocomplete="email"')
   })
 
   it('renders an agent-first landing with voice as a secondary control', async () => {
@@ -131,7 +126,7 @@ describe('voice demo boundary', () => {
     expect(html).toContain('id="human-help-button"')
     expect(html).toContain('id="conversation-human-button"')
     expect(html).toContain('aria-label="Open a support request"')
-    expect(html).toContain('Describe your issue first. We’ll ask for your email only if a private request is needed.')
+    expect(html).toContain('Describe your issue first. Sign-in is needed only when a private request is opened.')
     expect(html).toContain('id="reconnect-banner"')
     expect(html).not.toContain('class="privacy-note"')
     expect(html).toContain('viewport-fit=cover')
@@ -140,14 +135,12 @@ describe('voice demo boundary', () => {
     // the hidden transcript until the agent needs them.
     const thread = html.indexOf('id="thread"')
     const transcript = html.indexOf('id="transcript"')
-    const contactFlow = html.indexOf('id="contact-flow"')
-    const contactForm = html.indexOf('id="contact-form"')
+    const signinFlow = html.indexOf('id="signin-flow"')
     const composer = html.indexOf('id="text-form"')
     expect(thread).toBeGreaterThan(-1)
     expect(transcript).toBeGreaterThan(thread)
-    expect(contactFlow).toBeGreaterThan(transcript)
-    expect(contactForm).toBeGreaterThan(contactFlow)
-    expect(composer).toBeGreaterThan(contactForm)
+    expect(signinFlow).toBeGreaterThan(transcript)
+    expect(composer).toBeGreaterThan(signinFlow)
   })
 
   it('renders escaped live help topics with conventional knowledge links', async () => {
@@ -270,20 +263,8 @@ describe('voice demo boundary', () => {
     expect(normalizeVoiceContact({})).toBeNull()
   })
 
-  it('resumes the exact action interrupted by the contact card', () => {
-    expect(contactContinuationMessage('open_ticket')).toContain('support ticket I requested')
-    expect(contactContinuationMessage('order_lookup')).toContain('order number I already gave')
-    expect(contactContinuationMessage('product_help')).toContain('Ask me for my order number')
-    expect(contactContinuationMessage('handled')).toBeNull()
-    expect(contactContinuationMessage('unknown')).toBe('I have shared my name and email.')
+  it('resumes the interrupted flow with an explicit sign-in continuation', () => {
+    expect(SIGN_IN_CONTINUATION).toContain('signed in with my store account')
   })
 
-  it('gates identity-bearing actions on a server-held contact', () => {
-    expect(hasVoiceContact({ contact: { name: 'Ada', email: 'ada@example.test' } })).toBe(true)
-    expect(hasVoiceContact({ contact: null })).toBe(false)
-    expect(hasVoiceContact({ contact: { name: 'Ada', email: 'not-an-email' } })).toBe(false)
-    expect(hasVoiceContact({ contact: { email: 'ada@example.test' } })).toBe(false)
-    expect(hasVoiceContact({ verifiedContact: { email: 'ada@example.test' } })).toBe(false)
-    expect(hasVoiceContact(null)).toBe(false)
-  })
 })

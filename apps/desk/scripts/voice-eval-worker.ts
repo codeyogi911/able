@@ -4,8 +4,8 @@ import { z } from 'zod'
 import {
   directVoiceResponse,
   prepareVoiceModelMessages,
-  UNDOCUMENTED_PRODUCT_ORDER_CONTACT_REPLY,
-  UNDOCUMENTED_PRODUCT_TICKET_CONTACT_REPLY,
+  UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY,
+  UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY,
   VOICE_AGENT_MODEL,
   voiceAgentSystemPrompt,
 } from '../src/voice/conversation'
@@ -53,12 +53,11 @@ export default {
     const kbCase = body?.kb && typeof body.kb === 'object'
       ? body.kb as { articles?: KbArticleFixture[]; unavailable?: boolean }
       : null
-    // Mirrors production's deferred identity: cases opt into the anonymous
-    // branch with contact: false, which swaps the ticket/order tools for
-    // request_contact and flips the prompt branch. signedIn: true mirrors a
-    // store-account session, which adds list_my_orders.
-    const contactPresent = body?.contact !== false
-    const signedInCase = body?.signedIn === true && contactPresent
+    // Mirrors production's Shopify-first identity: cases opt into the
+    // anonymous branch with contact: false, which swaps the ticket/order
+    // tools for request_sign_in and flips the prompt branch. A present
+    // contact IS a signed-in store account.
+    const signedInCase = body?.signedIn === true || body?.contact !== false
 
     const latest = messages.at(-1)
     const directResponse = latest?.role === 'user' && typeof latest.content === 'string'
@@ -78,7 +77,7 @@ export default {
         reasoning_effort: null,
         chat_template_kwargs: { enable_thinking: false },
       }),
-      system: voiceAgentSystemPrompt('Example Company', { orders: Boolean(ordersCase), contact: contactPresent, signedIn: signedInCase }),
+      system: voiceAgentSystemPrompt('Example Company', { orders: Boolean(ordersCase), signedIn: signedInCase }),
       messages: prepareVoiceModelMessages(messages as Array<{ role: 'user' | 'assistant'; content: string }>),
       tools: {
         // Mirrors production: the help-centre tool is always registered.
@@ -102,7 +101,7 @@ export default {
             execute: async () => ({ status: 'ok', orders: Array.isArray(ordersCase.fixtures) ? ordersCase.fixtures : [] }),
           }),
         } : {}),
-        ...(ordersCase && contactPresent ? {
+        ...(ordersCase && signedInCase ? {
           get_order_status: tool({
             description: "Look up one order by the caller's order number. The server matches the number together with this session's contact email and returns not_found unless both match; it never reveals whether a number exists for a different email.",
             inputSchema: z.object({
@@ -119,7 +118,7 @@ export default {
             },
           }),
         } : {}),
-        ...(contactPresent ? {
+        ...(signedInCase ? {
           create_ticket: tool({
             description: "Open a durable support case for the caller's server-held contact. Synthesize both internal fields from the natural conversation; never ask the caller to provide or format them.",
             inputSchema: z.object({
@@ -140,18 +139,18 @@ export default {
             execute: async ({ category }) => ({ ref: 'EVAL-ESC-1', status: 'open', category }),
           }),
         } : {
-          request_contact: tool({
-            description: "Show the caller a secure card to share their name and the email used for their order or ticket follow-up. Use it before any order lookup, ticket, or human review when no contact is on file. The card appears under your reply; the caller fills it there, never in the chat.",
+          request_sign_in: tool({
+            description: 'Show the caller a store-account sign-in button. Use it before any order lookup, ticket, or human review when the caller is not signed in. The button appears under your reply; sign-in happens on the store’s own hosted login, never in the chat.',
             inputSchema: z.object({
               reason: z.enum(['order_lookup', 'open_ticket', 'product_help'])
-                .describe('Why contact details are needed right now.'),
+                .describe('Why a verified identity is needed right now.'),
             }),
             execute: async ({ reason }) => reason === 'product_help'
               ? {
                   status: 'requested',
                   responseRequirement: ordersCase
-                    ? `Reply exactly: "${UNDOCUMENTED_PRODUCT_ORDER_CONTACT_REPLY}"`
-                    : `Reply exactly: "${UNDOCUMENTED_PRODUCT_TICKET_CONTACT_REPLY}"`,
+                    ? `Reply exactly: "${UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY}"`
+                    : `Reply exactly: "${UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY}"`,
                 }
               : { status: 'requested' },
           }),

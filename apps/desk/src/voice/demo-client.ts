@@ -1,6 +1,6 @@
 import { VoiceClient, type TranscriptMessage, type VoiceStatus } from '@cloudflare/voice/client'
 import './demo.css'
-import { contactContinuationMessage } from './contact'
+import { SIGN_IN_CONTINUATION } from './contact'
 import { HUMAN_HELP_MESSAGE } from './escalation'
 
 function required<T extends Element>(selector: string): T {
@@ -22,15 +22,10 @@ const elements = {
   conversationHumanButton: required<HTMLButtonElement>('#conversation-human-button'),
   landingStatus: required<HTMLElement>('#landing-status'),
   composerBar: required<HTMLElement>('#composer-bar'),
-  contactFlow: required<HTMLLIElement>('#contact-flow'),
-  contactForm: required<HTMLFormElement>('#contact-form'),
-  contactCardLead: required<HTMLElement>('#contact-card-lead'),
-  contactNameLabel: required<HTMLElement>('#contact-name-label'),
-  contactEmailLabel: required<HTMLElement>('#contact-email-label'),
-  contactName: required<HTMLInputElement>('#contact-name'),
-  contactEmail: required<HTMLInputElement>('#contact-email'),
-  contactSubmit: required<HTMLButtonElement>('#contact-submit'),
-  contactFeedback: required<HTMLElement>('#contact-feedback'),
+  signinFlow: required<HTMLLIElement>('#signin-flow'),
+  signinLead: required<HTMLElement>('#signin-card-lead'),
+  signinCopy: required<HTMLElement>('#signin-card-copy'),
+  signinButton: required<HTMLButtonElement>('#signin-button'),
   sessionTurnstile: required<HTMLElement>('#session-turnstile'),
   reconnectBanner: required<HTMLElement>('#reconnect-banner'),
   clearButton: required<HTMLButtonElement>('#clear-button'),
@@ -44,29 +39,38 @@ const elements = {
   handoffDescription: required<HTMLElement>('#handoff-description'),
   handoffReference: required<HTMLElement>('#handoff-reference'),
   handoffStatus: required<HTMLElement>('#handoff-status'),
-  verifyCard: required<HTMLLIElement>('#verify-card'),
-  verifyEmail: required<HTMLElement>('#verify-email'),
-  verifyTurnstile: required<HTMLElement>('#verify-turnstile'),
-  verifySend: required<HTMLButtonElement>('#verify-send'),
-  verifyForm: required<HTMLFormElement>('#verify-form'),
-  verifyCode: required<HTMLInputElement>('#verify-code'),
-  verifySubmit: required<HTMLButtonElement>('#verify-submit'),
-  verifyFeedback: required<HTMLElement>('#verify-feedback'),
 }
 
 const supportTaskButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-support-message]')]
 
 const RESET_FOCUS_KEY = 'able-voice-support-reset-focus'
 
+const SIGNIN_RESUME_KEY = 'able-signin-resume-session'
+const returnedFromSignIn = new URLSearchParams(window.location.search).has('signed_in')
+
 function sessionName(): string {
   // Help always opens at its landing page. A browser refresh is a new visit,
-  // not an accidental restoration of a previous transcript.
+  // not an accidental restoration of a previous transcript — with one
+  // exception: returning from the hosted store sign-in resumes the exact
+  // conversation that requested it.
+  if (returnedFromSignIn) {
+    try {
+      const stored = sessionStorage.getItem(SIGNIN_RESUME_KEY)
+      sessionStorage.removeItem(SIGNIN_RESUME_KEY)
+      if (stored && /^voice-[a-z0-9]{20}$/.test(stored)) return stored
+    } catch {
+      // Fall through to a fresh session.
+    }
+  }
   return `voice-${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`
 }
 
+const activeSessionName = sessionName()
+if (returnedFromSignIn) history.replaceState(null, '', window.location.pathname)
+
 const client = new VoiceClient({
   agent: 'AbleDeskAgent',
-  name: sessionName(),
+  name: activeSessionName,
   preferredFormat: 'mp3',
 })
 
@@ -74,11 +78,10 @@ let connected = false
 let hasConnected = false
 let callActive = false
 let sessionReady = false
-let contactReady = false
-let contactPending = false
+let signInContinuationPending = returnedFromSignIn
 
-type ContactReason = 'order_lookup' | 'open_ticket' | 'product_help'
-let contactReason: ContactReason | null = null
+type SignInReason = 'order_lookup' | 'open_ticket'
+let signinReason: SignInReason | null = null
 
 type SourceArticle = { title: string; section: string; url: string }
 
@@ -87,14 +90,9 @@ const hiddenTranscriptMessages = new Set<string>()
 let notes: { anchor: number; text: string }[] = []
 let sources: { anchor: number; articles: SourceArticle[] }[] = []
 let ticketAnchor: number | null = null
-let contactAnchor: number | null = null
-let verifyAnchor: number | null = null
-let verifyResendAt = 0
-let verifyWidgetId: string | null = null
-let verifyCountdown: ReturnType<typeof setInterval> | null = null
+let signinAnchor: number | null = null
 let interimText = ''
 let typing = false
-let contactFocusPending = false
 let resetReload: ReturnType<typeof setTimeout> | null = null
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -297,7 +295,7 @@ function safeArticleUrl(value: unknown): string | null {
 }
 
 function renderThread(): void {
-  if (latestMessages.length > 0 || interimText || typing || contactAnchor !== null || verifyAnchor !== null || ticketAnchor !== null) {
+  if (latestMessages.length > 0 || interimText || typing || signinAnchor !== null || ticketAnchor !== null) {
     setConversationMode(true)
   }
   const stick = isNearBottom()
@@ -317,13 +315,9 @@ function renderThread(): void {
         rows.push(sourcesRow(entry.anchor, entry.articles, sourceOpenState.get(entry.anchor) ?? true))
       }
     }
-    if (contactAnchor !== null && contactAnchor <= length && contactAnchor === index) {
-      elements.contactFlow.hidden = false
-      rows.push(elements.contactFlow)
-    }
-    if (verifyAnchor !== null && verifyAnchor <= length && verifyAnchor === index) {
-      elements.verifyCard.hidden = false
-      rows.push(elements.verifyCard)
+    if (signinAnchor !== null && signinAnchor <= length && signinAnchor === index) {
+      elements.signinFlow.hidden = false
+      rows.push(elements.signinFlow)
     }
     if (ticketAnchor !== null && ticketAnchor <= length && ticketAnchor === index) {
       elements.handoffCard.hidden = false
@@ -341,10 +335,6 @@ function renderThread(): void {
   if (interimText) rows.push(pendingRow(interimText))
   if (typing) rows.push(typingRow())
   elements.transcript.replaceChildren(...rows)
-  if (contactFocusPending && elements.contactFlow.isConnected) {
-    contactFocusPending = false
-    elements.contactName.focus()
-  }
   if (stick) scrollToBottom()
 }
 
@@ -364,8 +354,8 @@ function updateControls(status: VoiceStatus): void {
         extrasFlushed = true
       }
     }
-    if (contactAnchor !== null && contactAnchor > latestMessages.length) {
-      contactAnchor = latestMessages.length
+    if (signinAnchor !== null && signinAnchor > latestMessages.length) {
+      signinAnchor = latestMessages.length
       extrasFlushed = true
     }
   }
@@ -399,75 +389,50 @@ function updateControls(status: VoiceStatus): void {
   }
 }
 
-function applyContactCardCopy(): void {
-  const copy = contactReason === 'order_lookup'
+function applySignInCardCopy(): void {
+  const copy = signinReason === 'order_lookup'
     ? {
-      lead: 'Find your order',
-      name: 'Name',
-      email: 'Email used at checkout',
-      feedback: 'We use your email with the order number to protect your details. Your name is used if support needs to follow up.',
-      submit: 'Continue to order lookup',
+      lead: 'Sign in to check your order',
+      copy: 'Use your store account — a quick code by email, no password. I’ll pull your orders up right after.',
     }
-    : contactReason === 'open_ticket'
-      ? {
-        lead: 'Open a private support request',
-        name: 'Name',
-        email: 'Email for your private case link',
-        feedback: 'We use this address for this private support request.',
-        submit: 'Open support request',
-      }
-      : contactReason === 'product_help'
-        ? {
-          lead: 'Send this to support',
-          name: 'Name',
-          email: 'Email for follow-up',
-          feedback: 'We’ll use these details only for this support request.',
-          submit: 'Continue',
-        }
-        : {
-          lead: 'Share support details',
-          name: 'Name',
-          email: 'Email',
-          feedback: 'Used only for the support action you requested.',
-          submit: 'Continue',
-        }
-  elements.contactCardLead.textContent = copy.lead
-  elements.contactNameLabel.textContent = copy.name
-  elements.contactEmailLabel.textContent = copy.email
-  elements.contactFeedback.textContent = copy.feedback
-  elements.contactSubmit.dataset.readyLabel = copy.submit
+    : {
+      lead: 'Sign in to continue',
+      copy: 'Use your store account — a quick code by email, no password. You’ll come right back to this conversation.',
+    }
+  elements.signinLead.textContent = copy.lead
+  elements.signinCopy.textContent = copy.copy
 }
 
-function updateContactCard(): void {
-  elements.contactSubmit.disabled = !connected || contactPending
-  elements.contactName.disabled = contactPending
-  elements.contactEmail.disabled = contactPending
-  elements.contactSubmit.textContent = contactPending ? 'Saving…' : elements.contactSubmit.dataset.readyLabel ?? 'Continue'
+function readSignInReason(value: unknown): SignInReason | null {
+  return value === 'order_lookup' || value === 'open_ticket' ? value : null
 }
 
-function readContactReason(value: unknown): ContactReason | null {
-  return value === 'order_lookup' || value === 'open_ticket' || value === 'product_help'
-    ? value
-    : null
-}
-
-function showContactCard(anchor: 'now' | 'after_reply'): void {
+function showSignInCard(anchor: 'now' | 'after_reply'): void {
   setConversationMode(true)
-  if (contactAnchor === null) {
-    contactAnchor = anchor === 'after_reply' ? afterReplyAnchor() : latestMessages.length
-    contactFocusPending = true
+  if (signinAnchor === null) {
+    signinAnchor = anchor === 'after_reply' ? afterReplyAnchor() : latestMessages.length
   }
-  updateContactCard()
+  applySignInCardCopy()
+  elements.signinButton.disabled = false
   renderThread()
   scrollToBottom()
 }
 
-function hideContactCard(): void {
-  contactAnchor = null
-  contactFocusPending = false
-  elements.contactFlow.hidden = true
-  elements.contactFeedback.textContent = 'Used only for the support action you requested.'
+function hideSignInCard(): void {
+  signinAnchor = null
+  elements.signinFlow.hidden = true
   renderThread()
+}
+
+function beginStoreSignIn(): void {
+  try {
+    sessionStorage.setItem(SIGNIN_RESUME_KEY, activeSessionName)
+  } catch {
+    // Without session storage the conversation cannot resume, but sign-in
+    // itself still works from a fresh session.
+  }
+  elements.signinButton.disabled = true
+  window.location.assign('/auth/shopify/start')
 }
 
 type TurnstileApi = {
@@ -486,8 +451,9 @@ function turnstileApi(): TurnstileApi | undefined {
   return (window as unknown as { turnstile?: TurnstileApi }).turnstile
 }
 
-// The session proof runs an invisible managed check once per connection; the
-// contact card itself has no widget, so mid-conversation identity stays light.
+// The session proof runs an invisible managed check once per connection;
+// identity itself is the store-account sign-in, which happens on the store's
+// hosted login rather than in the chat.
 let sessionWidgetId: string | null = null
 let pendingSessionToken: string | null = null
 const sessionSitekey = elements.sessionTurnstile.dataset.sitekey ?? ''
@@ -535,102 +501,16 @@ function beginSessionProof(): void {
   }
 }
 
-// The contact widget was removed; the verification card still renders its own
-// explicit widget the first time it is shown (dormant OTP flow).
-function ensureVerifyTurnstile(): void {
-  if (verifyWidgetId !== null) return
-  const api = turnstileApi()
-  const sitekey = elements.verifyTurnstile.dataset.sitekey ?? ''
-  if (!api || !sitekey) return
-  try {
-    verifyWidgetId = api.render(elements.verifyTurnstile, { sitekey, action: 'voice_verify', size: 'flexible' })
-  } catch {
-    verifyWidgetId = null
-  }
-}
-
-function verifyTurnstileToken(): string {
-  if (verifyWidgetId === null) return ''
-  return turnstileApi()?.getResponse(verifyWidgetId) ?? ''
-}
-
-function resetVerifyTurnstile(): void {
-  if (verifyWidgetId !== null) turnstileApi()?.reset(verifyWidgetId)
-}
-
-function stopVerifyCountdown(): void {
-  if (verifyCountdown !== null) {
-    clearInterval(verifyCountdown)
-    verifyCountdown = null
-  }
-}
-
-function updateVerifySend(): void {
-  const remaining = Math.ceil((verifyResendAt - Date.now()) / 1_000)
-  if (remaining > 0) {
-    elements.verifySend.disabled = true
-    elements.verifySend.textContent = `Resend in ${remaining}s`
-    return
-  }
-  stopVerifyCountdown()
-  elements.verifySend.disabled = !connected
-  elements.verifySend.textContent = verifyResendAt > 0 ? 'Resend code' : 'Email me a code'
-}
-
-function startVerifyCountdown(): void {
-  stopVerifyCountdown()
-  updateVerifySend()
-  verifyCountdown = setInterval(updateVerifySend, 1_000)
-}
-
-function showVerifyCard(): void {
-  setConversationMode(true)
-  if (verifyAnchor === null) verifyAnchor = latestMessages.length
-  ensureVerifyTurnstile()
-  updateVerifySend()
-  renderThread()
-  scrollToBottom()
-}
-
-function hideVerifyCard(): void {
-  verifyAnchor = null
-  elements.verifyCard.hidden = true
-  elements.verifyForm.hidden = true
-  elements.verifyCode.value = ''
-  elements.verifyFeedback.textContent = ''
-  stopVerifyCountdown()
-  renderThread()
-}
-
-const ERROR_COPY: Record<string, string> = {
-  invalid_contact: 'Check your name and email, then try again.',
-  session_required: 'The chat is still finishing its anti-spam check. Try again in a moment.',
-  rate_limited: 'Too many attempts right now. Wait a minute and try again.',
-  unavailable: 'That could not be completed right now. Try again.',
-}
-
 const SESSION_ERROR_COPY: Record<string, string> = {
   rate_limited: 'Too many chat sessions from this connection. Wait a minute, then reload the page.',
   turnstile_not_configured: 'This chat is not fully set up yet. Please try again later.',
-}
-
-const VERIFY_ERROR_COPY: Record<string, string> = {
-  contact_required: 'Share your email first, then request a code.',
-  cooldown: 'A code was just sent. Wait a minute before requesting another.',
-  request_in_progress: 'A code request is already in progress.',
-  rate_limited: 'Too many attempts right now. Wait a minute and try again.',
-  turnstile_required: 'Complete the anti-spam check and try again.',
-  turnstile_not_configured: 'Verification is not fully set up yet. Please try again later.',
-  email_not_configured: 'Verification email is not ready yet. Please try again later.',
-  invalid_or_expired_code: 'That code is incorrect or expired. Check the email and try again.',
-  unavailable: 'That could not be completed right now. Try again.',
 }
 
 function renderTicket(value: unknown): void {
   if (!value || typeof value !== 'object') return
   const ticket = value as { reference?: unknown; label?: unknown; status?: unknown }
   elements.handoffCategory.textContent = typeof ticket.label === 'string' ? ticket.label : 'Support ticket opened'
-  elements.handoffDescription.textContent = 'A support ticket was opened for the email you shared. The team will follow up there.'
+  elements.handoffDescription.textContent = 'A support ticket was opened under your store account. The team will follow up by email.'
   elements.handoffReference.textContent = typeof ticket.reference === 'string' ? ticket.reference : '—'
   elements.handoffStatus.textContent = typeof ticket.status === 'string' ? ticket.status : 'open'
   ticketAnchor = latestMessages.length
@@ -647,6 +527,15 @@ function renderCustomMessage(value: unknown): void {
     elements.sessionTurnstile.hidden = true
     elements.landingStatus.textContent = ''
     updateControls(client.status)
+    if (signInContinuationPending) {
+      // Back from the hosted store login: resume the interrupted flow. This is
+      // a machine-readable continuation, not customer copy.
+      signInContinuationPending = false
+      hideSignInCard()
+      hiddenTranscriptMessages.add(SIGN_IN_CONTINUATION)
+      setConversationMode(true)
+      client.sendText(SIGN_IN_CONTINUATION)
+    }
     if (focusAfterReset()) elements.landingInput.focus()
     return
   }
@@ -659,97 +548,9 @@ function renderCustomMessage(value: unknown): void {
     updateControls(client.status)
     return
   }
-  if (message.type === 'voice_contact_set') {
-    const completedReason = contactReason
-    contactReady = true
-    contactPending = false
-    hideContactCard()
-    updateControls(client.status)
-    const contact = message.contact as { email?: unknown } | undefined
-    const email = typeof contact?.email === 'string' ? contact.email : 'your email'
-    pushNote(completedReason === 'order_lookup'
-      ? `We’ll use ${email} only to look up this order`
-      : `We’ll use ${email} for this support action`)
-    contactReason = null
-    applyContactCardCopy()
-    updateContactCard()
-    // This is a machine-readable continuation, not customer copy. It lets Ava
-    // resume the interrupted flow while keeping the transcript natural.
-    const continuation = contactContinuationMessage(message.continuation)
-    if (latestMessages.length > 0 && continuation) {
-      hiddenTranscriptMessages.add(continuation)
-      client.sendText(continuation)
-    }
-    else elements.textInput.focus()
-    return
-  }
-  if (message.type === 'voice_contact_error') {
-    contactPending = false
-    const reason = typeof message.reason === 'string' ? message.reason : ''
-    elements.contactFeedback.textContent = ERROR_COPY[reason] ?? 'That could not be completed right now. Try again.'
-    updateContactCard()
-    return
-  }
-  if (message.type === 'voice_contact_required') {
-    contactReady = false
-    contactPending = false
-    contactReason = readContactReason(message.reason)
-    applyContactCardCopy()
-    showContactCard(message.anchor === 'after_reply' ? 'after_reply' : 'now')
-    return
-  }
-  if (message.type === 'voice_pending_action_error') {
-    pushNote('Your contact details were saved, but the ticket could not be opened. Send a message to try again.')
-    return
-  }
-  if (message.type === 'voice_identity_cleared') {
-    contactReady = false
-    contactPending = false
-    hideContactCard()
-    hideVerifyCard()
-    elements.contactName.value = ''
-    elements.contactEmail.value = ''
-    contactReason = null
-    applyContactCardCopy()
-    updateContactCard()
-    updateControls(client.status)
-    if (resetReload !== null) {
-      clearTimeout(resetReload)
-      resetReload = null
-      reloadFreshSession()
-    }
-    return
-  }
-  if (message.type === 'voice_verification_needed') {
-    showVerifyCard()
-    return
-  }
-  if (message.type === 'voice_verification_sent') {
-    verifyResendAt = Date.now() + 60_000
-    resetVerifyTurnstile()
-    showVerifyCard()
-    elements.verifyForm.hidden = false
-    elements.verifySubmit.disabled = false
-    const hint = typeof message.emailHint === 'string' ? message.emailHint : 'your email'
-    elements.verifyEmail.textContent = hint
-    elements.verifyFeedback.textContent = `Code sent to ${hint}. It expires in 10 minutes.`
-    startVerifyCountdown()
-    elements.verifyCode.focus()
-    return
-  }
-  if (message.type === 'voice_verified') {
-    hideVerifyCard()
-    const email = typeof message.email === 'string' ? message.email : 'your email'
-    pushNote(`Email verified — ${email}`)
-    return
-  }
-  if (message.type === 'voice_verification_error') {
-    resetVerifyTurnstile()
-    showVerifyCard()
-    elements.verifySubmit.disabled = false
-    const reason = typeof message.reason === 'string' ? message.reason : ''
-    elements.verifyFeedback.textContent = VERIFY_ERROR_COPY[reason] ?? 'That could not be completed right now. Try again.'
-    updateVerifySend()
+  if (message.type === 'voice_signin_required') {
+    signinReason = readSignInReason(message.reason)
+    showSignInCard(message.anchor === 'after_reply' ? 'after_reply' : 'now')
     return
   }
   if (message.type === 'voice_sources') {
@@ -783,8 +584,13 @@ function renderCustomMessage(value: unknown): void {
     ticketAnchor = null
     sources = []
     elements.handoffCard.hidden = true
-    hideContactCard()
+    hideSignInCard()
     renderThread()
+    if (resetReload !== null) {
+      clearTimeout(resetReload)
+      resetReload = null
+      reloadFreshSession()
+    }
     return
   }
   if (message.type === 'voice_ticket_created') renderTicket(message.ticket)
@@ -803,14 +609,8 @@ client.addEventListener('connectionchange', (isConnected) => {
   } else {
     callActive = false
     sessionReady = false
-    contactReady = false
-    contactPending = false
-    verifyResendAt = 0
-    hideContactCard()
-    hideVerifyCard()
     if (hasConnected) elements.reconnectBanner.hidden = false
   }
-  updateContactCard()
   updateControls(client.status)
 })
 client.addEventListener('statuschange', updateControls)
@@ -850,57 +650,27 @@ async function toggleVoice(): Promise<void> {
 elements.micButton.addEventListener('click', toggleVoice)
 elements.landingMicButton.addEventListener('click', toggleVoice)
 
-elements.contactForm.addEventListener('submit', (event) => {
-  event.preventDefault()
-  if (!elements.contactForm.reportValidity() || !connected) return
-  contactPending = true
-  elements.contactFeedback.textContent = 'Saving your contact details…'
-  client.sendJSON({
-    type: 'set_voice_contact',
-    name: elements.contactName.value.trim(),
-    email: elements.contactEmail.value.trim(),
-  })
-  updateContactCard()
-})
-
 elements.muteButton.addEventListener('click', () => client.toggleMute())
 
-elements.verifySend.addEventListener('click', () => {
-  if (!connected || Date.now() < verifyResendAt) return
-  elements.verifySend.disabled = true
-  elements.verifyFeedback.textContent = 'Sending a code to your email…'
-  client.sendJSON({ type: 'request_voice_verification', turnstileToken: verifyTurnstileToken() })
-})
-
-elements.verifyForm.addEventListener('submit', (event) => {
-  event.preventDefault()
-  if (!elements.verifyForm.reportValidity() || !connected) return
-  elements.verifySubmit.disabled = true
-  elements.verifyFeedback.textContent = 'Checking the code…'
-  client.sendJSON({ type: 'verify_voice_code', code: elements.verifyCode.value.trim() })
-})
+elements.signinButton.addEventListener('click', beginStoreSignIn)
 
 elements.clearButton.addEventListener('click', () => {
   if (callActive) client.endCall()
   callActive = false
   elements.clearButton.disabled = true
-  client.sendJSON({ type: 'clear_voice_identity' })
+  client.sendJSON({ type: 'clear_demo_session' })
   resetReload = setTimeout(reloadFreshSession, 2_000)
   latestMessages = []
   notes = []
   sources = []
   ticketAnchor = null
   elements.handoffCard.hidden = true
-  hideContactCard()
-  hideVerifyCard()
+  hideSignInCard()
   interimText = ''
   typing = false
   elements.landingInput.value = ''
   elements.textInput.value = ''
-  elements.contactName.value = ''
-  elements.contactEmail.value = ''
-  contactReason = null
-  applyContactCardCopy()
+  signinReason = null
   setConversationMode(false, true)
   renderThread()
   updateControls(client.status)
@@ -970,7 +740,6 @@ window.addEventListener('beforeunload', () => {
   client.disconnect()
 })
 
-updateContactCard()
 updateControls(client.status)
 setConversationMode(false)
 client.connect()
