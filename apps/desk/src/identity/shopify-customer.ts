@@ -84,7 +84,13 @@ export function resetShopifyCustomerDiscoveryCache(): void {
 
 async function fetchJson(fetcher: typeof fetch, url: string, init: RequestInit, timeoutMs: number): Promise<unknown | null> {
   try {
-    const response = await fetcher(url, { ...init, signal: AbortSignal.timeout(timeoutMs) })
+    const response = await fetcher(url, {
+      ...init,
+      // Shopify's edge rejects requests without a User-Agent (403), and a
+      // Workers-runtime fetch sends none by default.
+      headers: { 'user-agent': 'Able-Desk/1.0 (+https://github.com/codeyogi911/able)', accept: 'application/json', ...(init.headers ?? {}) },
+      signal: AbortSignal.timeout(timeoutMs),
+    })
     if (!response.ok) {
       logOutcome('http_error', { url: new URL(url).pathname, status: response.status })
       return null
