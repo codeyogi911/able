@@ -68,13 +68,20 @@ export function prepareVoiceModelMessages(messages: VoiceModelMessage[]): VoiceM
 
 export function voiceAgentSystemPrompt(
   workspaceName: string,
-  options: { orders?: boolean; contact?: boolean } = {},
+  options: { orders?: boolean; contact?: boolean; signedIn?: boolean } = {},
 ): string {
   const name = workspaceName.trim() || 'this workspace'
   const contact = options.contact !== false
   const ordersAvailable = options.orders === true
+  const signedIn = options.signedIn === true
+  // A signed-in caller must never be told to go find an order number: the
+  // sentence below REPLACES the ask-for-number instruction because the model
+  // follows whichever directive it saw last when both are present.
+  const orderAskLine = signedIn
+    ? 'The caller is signed in with their store account, so their identity and email are already verified. For an order question without an order number, call list_my_orders first and confirm which order the caller means — never ask them to find the number. When a specific order number is given, call get_order_status with it. The order tools return only the signed-in caller’s own data.'
+    : 'For order questions, ask the caller for the order number from their order confirmation email.'
   const orderCapability = ordersAvailable && contact
-    ? `\nYou can look up the caller's order. For order questions, ask the caller for the order number from their order confirmation email. If any caller message already includes an order number, reuse it and call get_order_status — never ask for it twice. Never ask the caller for an email address; the server already holds this session's email and matches the order automatically. If the tool returns not_found, say you could not find that order for the email on this session: suggest double-checking the number, or restarting the chat with the email used at checkout. If the tool returns unavailable, say you are having trouble checking orders right now — never say the order could not be found. In both cases the reply must end by offering to open a support ticket for the team; never omit that offer. Answer order questions only from tool data — never invent order details, and never speculate about whether an order number exists for a different email. When a product question has no documented answer, offer to check the caller's order so a ticket for the team carries the exact product and purchase date. If the caller's latest message only confirms that they shared their name and email after that undocumented-product handoff, reuse an order number from any earlier caller message and call get_order_status; if none exists, ask only for the order number. Do not create a ticket or claim an order check is underway before the lookup.`
+    ? `\nYou can look up the caller's order. ${orderAskLine} If any caller message already includes an order number, reuse it and call get_order_status — never ask for it twice. Never ask the caller for an email address; the server already holds this session's email and matches the order automatically. If the tool returns not_found, say you could not find that order for the email on this session: suggest double-checking the number, or restarting the chat with the email used at checkout. If the tool returns unavailable, say you are having trouble checking orders right now — never say the order could not be found. In both cases the reply must end by offering to open a support ticket for the team; never omit that offer. Answer order questions only from tool data — never invent order details, and never speculate about whether an order number exists for a different email. When a product question has no documented answer, offer to check the caller's order so a ticket for the team carries the exact product and purchase date. If the caller's latest message only confirms that they shared their name and email after that undocumented-product handoff, reuse an order number from any earlier caller message and call get_order_status; if none exists, ask only for the order number. Do not create a ticket or claim an order check is underway before the lookup.`
     : ordersAvailable
       ? ''
       : `\nOrder lookup is not available in this workspace. Never claim that you can check an order, shipping status, product purchase, or purchase date. For order questions, say you cannot check orders here and offer to open a support ticket for team follow-up.`

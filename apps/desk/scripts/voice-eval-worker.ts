@@ -43,6 +43,7 @@ export default {
       kb?: unknown
       stream?: unknown
       contact?: unknown
+      signedIn?: unknown
     } | null
     const messages = messagesFrom(body?.messages)
     if (!messages) return Response.json({ error: 'invalid_messages' }, { status: 400 })
@@ -54,8 +55,10 @@ export default {
       : null
     // Mirrors production's deferred identity: cases opt into the anonymous
     // branch with contact: false, which swaps the ticket/order tools for
-    // request_contact and flips the prompt branch.
+    // request_contact and flips the prompt branch. signedIn: true mirrors a
+    // store-account session, which adds list_my_orders.
     const contactPresent = body?.contact !== false
+    const signedInCase = body?.signedIn === true && contactPresent
 
     const latest = messages.at(-1)
     const directResponse = latest?.role === 'user' && typeof latest.content === 'string'
@@ -75,7 +78,7 @@ export default {
         reasoning_effort: null,
         chat_template_kwargs: { enable_thinking: false },
       }),
-      system: voiceAgentSystemPrompt('Example Company', { orders: Boolean(ordersCase), contact: contactPresent }),
+      system: voiceAgentSystemPrompt('Example Company', { orders: Boolean(ordersCase), contact: contactPresent, signedIn: signedInCase }),
       messages: prepareVoiceModelMessages(messages as Array<{ role: 'user' | 'assistant'; content: string }>),
       tools: {
         // Mirrors production: the help-centre tool is always registered.
@@ -92,6 +95,13 @@ export default {
             return articles.length > 0 ? { status: 'ok', articles } : { status: 'no_match' }
           },
         }),
+        ...(signedInCase && ordersCase ? {
+          list_my_orders: tool({
+            description: "List the signed-in caller's most recent orders: names, dates, payment and fulfillment status, totals, and tracking. Use when they ask about an order without giving a number, then confirm which order they mean. Returns only the signed-in caller's own orders.",
+            inputSchema: z.object({}),
+            execute: async () => ({ status: 'ok', orders: Array.isArray(ordersCase.fixtures) ? ordersCase.fixtures : [] }),
+          }),
+        } : {}),
         ...(ordersCase && contactPresent ? {
           get_order_status: tool({
             description: "Look up one order by the caller's order number. The server matches the number together with this session's contact email and returns not_found unless both match; it never reveals whether a number exists for a different email.",

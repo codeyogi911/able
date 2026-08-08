@@ -33,6 +33,15 @@ import { verifyPublicWrite } from './security/public-write'
 import { isLocalUrl, requestSurface } from './security/operator-host'
 import { loadWorkspaceSettings, updateWorkspaceSettings, type WorkspaceSettings } from './settings'
 import { shopifyConfigured } from './integrations/shopify'
+import {
+  beginShopifyCustomerLogin,
+  completeShopifyCustomerLogin,
+  SHOPIFY_CUSTOMER_LOGIN_COOKIE,
+  SHOPIFY_CUSTOMER_SESSION_COOKIE,
+  SHOPIFY_LOGIN_TRANSACTION_TTL_SECONDS,
+  shopifyCustomerConfigured,
+  verifyShopifyCustomerSession,
+} from './identity/shopify-customer'
 import { acceptWhatsAppWebhook, verifyWhatsAppWebhook } from './whatsapp/webhook'
 import { createCustomerWorkspace } from './suite/customer-workspace'
 import { createConversationRouter } from './suite/conversation-routing'
@@ -138,6 +147,71 @@ function portalCustomization(settings: WorkspaceSettings): PortalCustomization {
   }
 }
 
+function readCookieValue(request: Request, name: string): string | null {
+  const header = request.headers.get('Cookie') ?? ''
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=')
+    if (key === name) return rest.join('=') || null
+  }
+  return null
+}
+
+function authCookie(name: string, value: string, maxAgeSeconds: number): string {
+  return `${name}=${value}; Max-Age=${maxAgeSeconds}; Path=/; HttpOnly; Secure; SameSite=Lax`
+}
+
+function authRedirect(location: string, cookies: string[]): Response {
+  const headers = new Headers({ location, 'cache-control': 'no-store' })
+  for (const cookie of cookies) headers.append('set-cookie', cookie)
+  return new Response(null, { status: 302, headers })
+}
+
+/**
+ * The optional verified-identity rail: sign in with the deployment's Shopify
+ * customer account. Every failure path lands the visitor back on the portal
+ * as anonymous — sign-in never blocks the progressive contact flow.
+ */
+async function shopifyAuthResponse(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  if (request.method !== 'GET') return notFoundResponse()
+  if (url.pathname === '/auth/shopify/logout') {
+    return authRedirect('/', [
+      authCookie(SHOPIFY_CUSTOMER_SESSION_COOKIE, '', 0),
+      authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0),
+    ])
+  }
+  const secret = capabilitySecret(request, env)
+  if (!shopifyCustomerConfigured(env) || !secret) return notFoundResponse()
+  const redirectUri = new URL('/auth/shopify/callback', url.origin).toString()
+
+  if (url.pathname === '/auth/shopify/start') {
+    const started = await beginShopifyCustomerLogin(env, { redirectUri, secret })
+    if (!started) return authRedirect('/', [authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0)])
+    return authRedirect(started.url, [
+      authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, started.transactionToken, SHOPIFY_LOGIN_TRANSACTION_TTL_SECONDS),
+    ])
+  }
+
+  if (url.pathname === '/auth/shopify/callback') {
+    const code = url.searchParams.get('code') ?? ''
+    const state = url.searchParams.get('state') ?? ''
+    const transactionToken = readCookieValue(request, SHOPIFY_CUSTOMER_LOGIN_COOKIE) ?? ''
+    const completed = code && state && transactionToken
+      ? await completeShopifyCustomerLogin(env, { code, state, transactionToken, redirectUri, secret })
+      : null
+    if (!completed) {
+      return authRedirect('/', [authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0)])
+    }
+    const maxAge = Math.max(60, Math.floor((completed.session.expiresAt - Date.now()) / 1000))
+    return authRedirect('/', [
+      authCookie(SHOPIFY_CUSTOMER_SESSION_COOKIE, completed.sessionToken, maxAge),
+      authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0),
+    ])
+  }
+
+  return notFoundResponse()
+}
+
 function rewritePath(request: Request, prefix: string): Request {
   const url = new URL(request.url)
   url.pathname = url.pathname.slice(prefix.length) || '/'
@@ -159,6 +233,10 @@ async function portalResponse(request: Request, env: Env, ctx: ExecutionContext)
   const knowledge = createPublicKnowledge(env.DB)
   if (request.method === 'GET' && url.pathname === '/' && voiceReady) {
     const content = await knowledge.home()
+    const customerSession = await verifyShopifyCustomerSession(
+      capabilitySecret(request, env),
+      readCookieValue(request, SHOPIFY_CUSTOMER_SESSION_COOKIE),
+    )
     return voiceDemoPageResponse(
       voiceBranding(settings),
       env.TURNSTILE_SITE_KEY,
@@ -172,6 +250,10 @@ async function portalResponse(request: Request, env: Env, ctx: ExecutionContext)
           .slice(0, 3)
           .map((article) => ({ slug: article.slug, title: article.title })),
       })),
+      {
+        configured: shopifyCustomerConfigured(env),
+        customerName: customerSession?.name ?? null,
+      },
     )
   }
   const helpdesk = createHelpdesk({
@@ -354,6 +436,7 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
     }
     if (url.pathname === '/mcp') return mcpResponse(request, env)
     if (url.pathname === '/ops' || url.pathname.startsWith('/ops/')) return opsResponse(request, env, ctx)
+    if (url.pathname.startsWith('/auth/shopify/')) return shopifyAuthResponse(request, env)
     return portalResponse(request, env, ctx)
   } catch (error) {
     console.error(JSON.stringify({ event: 'request_failed', error: error instanceof Error ? error.name : 'UnknownError' }))

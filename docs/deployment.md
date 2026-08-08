@@ -98,6 +98,25 @@ Provider acceptance records the setup test as accepted. It does not prove inbox 
 
 Create a Turnstile widget for the portal hostname and expose only its site key through private workspace/deployment configuration. Keep the secret in Wrangler. The Worker also applies a rate-limit binding; production deployments should add appropriate WAF rules and bot controls for their risk profile.
 
+## 5a. Optional: store-account sign-in for order help
+
+When the deployment's Shopify store uses new customer accounts, the support
+portal can offer "Sign in for order help": a signed-in customer skips the
+contact card and may ask about their own recent orders without an order
+number. Anonymous support is unaffected — sign-in is an additive rail.
+
+1. Create a Customer Account API public client for the store (for example
+   through the Headless sales channel) and record its client ID.
+2. Add `https://<portal hostname>/auth/shopify/callback` to the client's
+   allowed redirect URIs.
+3. Set the secret: `npx wrangler secret put SHOPIFY_CUSTOMER_CLIENT_ID`.
+
+The sign-in link appears on the assistant homepage automatically once the
+client ID and shop domain are configured. Sessions are short-lived, carried in
+a signed secure cookie, and read a bounded projection only: profile plus
+recent orders with status and tracking. Sign-in failures always land the
+visitor back on the portal as anonymous.
+
 ## 6. Connect WhatsApp Cloud API
 
 Use the Meta app owned by this single-tenant deployment. In **WhatsApp > Configuration**, set the callback URL to the public portal origin plus `/webhooks/whatsapp`, enter the same private value stored in `WHATSAPP_VERIFY_TOKEN`, verify the callback, and subscribe the app to the WABA's `messages` webhook field.
