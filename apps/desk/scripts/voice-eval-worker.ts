@@ -10,6 +10,7 @@ import {
   voiceAgentSystemPrompt,
 } from '../src/voice/conversation'
 import { dedupAssistantText, dedupRepeatedSentences } from '../src/voice/dedup'
+import { claimsKnowledgeGap, prepareForcedSearchStep, repairUnsearchedKnowledgeGap } from '../src/voice/repair'
 import { ESCALATION_CATEGORIES } from '../src/voice/escalation'
 
 type EvalEnv = { AI: Ai }
@@ -168,8 +169,13 @@ export default {
       const toolCalls: { name: string; input: unknown }[] = []
       const errors: string[] = []
       let text = ''
-      // Mirrors production: the agent wraps fullStream in the same dedup.
-      for await (const part of dedupAssistantText(result.fullStream)) {
+      // Mirrors production: the agent wraps fullStream in the same
+      // knowledge-gap repair and dedup.
+      const repaired = repairUnsearchedKnowledgeGap(
+        result.fullStream,
+        () => streamText({ ...turnOptions, prepareStep: prepareForcedSearchStep }).fullStream,
+      )
+      for await (const part of dedupAssistantText(repaired)) {
         const p = part as { type: string; text?: string; toolName?: string; input?: unknown; error?: unknown }
         streamParts.push(p.type)
         if (p.type === 'text-delta') text += p.text ?? ''
@@ -179,13 +185,25 @@ export default {
       return Response.json({ text, toolCalls, streamParts, errors })
     }
 
-    const result = await generateText(turnOptions)
+    const collectToolCalls = (
+      steps: ReadonlyArray<{ toolCalls: ReadonlyArray<{ toolName: string; input: unknown } | null | undefined> }>,
+    ) => steps.flatMap((step) => step.toolCalls.flatMap((call) => (call ? [{
+      name: call.toolName,
+      input: call.input,
+    }] : [])))
+    let result = await generateText(turnOptions)
+    let repaired = false
+    // Mirrors production's stream repair: a turn that claims a knowledge gap
+    // without any tool call is re-run once with the search forced, and only
+    // the repaired turn is reported.
+    if (collectToolCalls(result.steps).length === 0 && claimsKnowledgeGap(result.text)) {
+      result = await generateText({ ...turnOptions, prepareStep: prepareForcedSearchStep })
+      repaired = true
+    }
     return Response.json({
       text: dedupRepeatedSentences(result.text),
-      toolCalls: result.steps.flatMap((step) => step.toolCalls.flatMap((call) => (call ? [{
-        name: call.toolName,
-        input: call.input,
-      }] : []))),
+      toolCalls: collectToolCalls(result.steps),
+      ...(repaired ? { repaired } : {}),
     })
   },
 }

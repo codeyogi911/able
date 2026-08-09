@@ -51,6 +51,7 @@ import {
   type VoiceVerificationChallenge,
 } from './verification'
 import { dedupAssistantText } from './dedup'
+import { prepareForcedSearchStep, repairUnsearchedKnowledgeGap } from './repair'
 import {
   SHOPIFY_CUSTOMER_SESSION_COOKIE,
   shopifyCustomerConfigured,
@@ -356,7 +357,8 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     let contactCardRequested = false
     const settings = await loadWorkspaceSettings(this.env.DB)
     const workersAI = createWorkersAI({ binding: this.env.AI })
-    const result = streamText({
+    const invokeVoiceModel = (repairing: boolean) => streamText({
+      ...(repairing ? { prepareStep: prepareForcedSearchStep } : {}),
       model: workersAI(VOICE_AGENT_MODEL, {
         sessionAffinity: this.sessionAffinity,
         reasoning_effort: null,
@@ -478,11 +480,17 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       stopWhen: stepCountIs(4),
       abortSignal: context.signal,
     })
+    const result = invokeVoiceModel(false)
 
-    // At temperature 0 the model sometimes restates its pre-tool-call sentence
-    // verbatim after the tool result; the wrapper drops exact repeats within
+    // A turn that claims a knowledge gap without any tool call is re-run once
+    // with the help-centre search forced, and at temperature 0 the model
+    // sometimes restates its pre-tool-call sentence verbatim after the tool
+    // result; the wrappers repair the former and drop exact repeats within
     // the turn before they reach TTS and the transcript.
-    const stream = dedupAssistantText(result.fullStream)
+    const stream = dedupAssistantText(repairUnsearchedKnowledgeGap(
+      result.fullStream,
+      () => invokeVoiceModel(true).fullStream,
+    ))
     if (contact) return stream
 
     // Safety net for the anonymous branch: the model occasionally speaks the
