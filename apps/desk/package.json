@@ -82,7 +82,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "agents": "0.20.1",
     "ai": "7.0.37",
-    "hono": "^4.12.32",
+    "hono": "^4.13.0",
     "marked": "^18.0.7",
     "postal-mime": "^2.7.5",
     "workers-ai-provider": "4.0.0",
