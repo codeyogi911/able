@@ -81,7 +81,7 @@
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "agents": "0.20.1",
-    "ai": "7.0.37",
+    "ai": "7.0.56",
     "hono": "^4.12.32",
     "marked": "^18.0.7",
     "postal-mime": "^2.7.5",
