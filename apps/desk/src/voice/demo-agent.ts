@@ -35,6 +35,7 @@ import {
   productComparisonReply,
   productComparisonTerms,
   prepareVoiceModelMessages,
+  spokenVoiceChunk,
   UNDOCUMENTED_PRODUCT_FORM_REPLY,
   UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY,
   UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY,
@@ -152,6 +153,7 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
   tts = new WorkersAITTS(this.env.AI, { speaker: 'asteria' })
 
   #activeSpeaker: string | null = null
+  #spokenTurns = new Map<string, { chunks: number; characters: number }>()
 
   onConnect(connection: Connection, context: ConnectionContext): void {
     const url = new URL(context.request.url)
@@ -183,11 +185,13 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
 
   onCallEnd(connection: Connection): void {
     if (this.#activeSpeaker === connection.id) this.#activeSpeaker = null
+    this.#spokenTurns.delete(connection.id)
     this.#clearHistory()
   }
 
   onClose(): void {
     this.#activeSpeaker = null
+    this.#spokenTurns.clear()
     // A dropped socket is not the end of the visit. Keep history and session
     // state for a grace period so the client's automatic reconnect resumes the
     // conversation mid-flow, then wipe everything if nobody came back.
@@ -239,7 +243,20 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     return bounded.length >= 2 ? bounded : null
   }
 
+  beforeSynthesize(text: string, connection: Connection): string | null {
+    const state = this.#spokenTurns.get(connection.id) ?? { chunks: 0, characters: 0 }
+    if (state.chunks >= 2 || state.characters >= 260) return null
+    const spoken = spokenVoiceChunk(text, 260 - state.characters)
+    if (!spoken) return null
+    this.#spokenTurns.set(connection.id, {
+      chunks: state.chunks + 1,
+      characters: state.characters + spoken.length,
+    })
+    return spoken
+  }
+
   async onTurn(transcript: string, context: VoiceTurnContext) {
+    this.#spokenTurns.set(context.connection.id, { chunks: 0, characters: 0 })
     const state = connectionState(context.connection)
     if (state.sessionProofPassed !== true) {
       context.connection.send(JSON.stringify({ type: 'voice_session_required' }))

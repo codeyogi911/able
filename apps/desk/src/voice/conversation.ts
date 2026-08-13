@@ -9,6 +9,33 @@ export const UNDOCUMENTED_PRODUCT_FORM_REPLY =
 
 export type VoiceModelMessage = { role: 'user' | 'assistant'; content: string }
 
+const SPOKEN_RESPONSE_CHARACTER_LIMIT = 260
+
+/**
+ * Turn one streamed response sentence into speech-friendly copy. The complete
+ * model response still reaches the transcript; this projection prevents TTS
+ * from reading Markdown syntax, URLs, and long visual detail verbatim.
+ */
+export function spokenVoiceChunk(text: string, remaining = SPOKEN_RESPONSE_CHARACTER_LIMIT): string | null {
+  if (remaining < 24) return null
+  const cleaned = text
+    .replace(/\[([^\]]+)]\([^\s)]+\)/g, '$1')
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/^\s*(?:[-+*]|\d+[.)])\s+/gm, '')
+    .replace(/[*_`#>~]/g, '')
+    .replace(/₹\s*([\d,]+(?:\.\d+)?)/g, '$1 rupees')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/:\s*$/, '.')
+  if (!cleaned) return null
+  if (cleaned.length <= remaining) return cleaned
+
+  const candidate = cleaned.slice(0, remaining - 1)
+  const boundary = candidate.lastIndexOf(' ')
+  const shortened = (boundary >= 48 ? candidate.slice(0, boundary) : candidate).trim()
+  return shortened ? `${shortened}.` : null
+}
+
 const INCOMPLETE_SUPPORT_ACTION = /\b(?:open|create|raise|start)\s+(?:me\s+)?(?:a\s+)?(?:new\s+)?(?:support)?$/i
 const SENSITIVE_DATA_OFFER = /\b(?:tell|give|share|send|provide)\b.{0,60}\b(password|passcode|card number|security code|access token|government id)\b/i
 const STOREFRONT_SHOPPING_INTENT = /\b(?:buy|purchase|recommend|suggest|choose|compare|price|priced|cost|availability|available|in stock|stock|budget|cheaper|best|show me|do you have|looking for|find me|what should i (?:buy|get)|which .{0,40} should i (?:buy|get))\b/i
@@ -226,6 +253,7 @@ You cannot look up or report ticket status in this channel. If the caller asks a
 CONVERSATION
 Sound like an experienced, calm support person, not a form or workflow. Briefly acknowledge the customer's situation before the next useful step, using plain and sincere language. Do not use canned enthusiasm.
 ${indiaExperience}
+Put the answer in voice-first order. The first sentence must be a self-contained, natural spoken summary with no heading, colon, or list; place optional specifications, steps, and comparisons after it for the screen. Never make the caller listen to a catalog-style list before hearing the answer.
 Make any empathy specific to the problem or impact, and usually acknowledge it only once. Do not begin each reply with an apology or repeat generic reassurance. Specifically, never use stock transitions such as "let's get this moving." After the first acknowledgment, lead with the new fact learned, the answer, or the next useful question.
 Speech transcripts can be split at natural pauses. Treat a short latest message as a possible continuation of the preceding user message. Reconstruct the caller's meaning from the whole conversation, do not make them repeat themselves, and do not restart an answer that was already underway. If a transcript is clearly unfinished, say only "Go ahead, I'm listening."
 Ask at most one question per turn. Ask only for information that changes safety, diagnosis, or the next support action. Prefer a natural question such as "What happens when you press the power button?" Never ask the customer for a subject, short description, long description, ticket details, category, priority, or any other internal field.

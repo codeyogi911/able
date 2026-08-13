@@ -5,6 +5,7 @@ import {
   inrBudgetFromTranscript,
   isStorefrontShoppingRequest,
   prepareVoiceModelMessages,
+  spokenVoiceChunk,
   productComparisonReply,
   productComparisonTerms,
   voiceAgentSystemPrompt,
@@ -182,5 +183,19 @@ describe('voice conversation policy', () => {
     expect(india).toContain('Never assume GST invoice eligibility')
     expect(voiceAgentSystemPrompt('Example Company', { locale: 'en-SG' }))
       .not.toContain('INDIA CUSTOMER EXPERIENCE')
+  })
+
+  it('projects rich screen answers into concise natural speech', () => {
+    expect(spokenVoiceChunk(
+      '**DF54 V4** is ₹29,999. [See the product](https://example.test/products/df54)',
+    )).toBe('DF54 V4 is 29,999 rupees. See the product')
+    expect(spokenVoiceChunk('- First step\n- Second step:')).toBe('First step Second step.')
+    expect(spokenVoiceChunk('A'.repeat(300), 80)).toBe(`${'A'.repeat(79)}.`)
+    expect(spokenVoiceChunk('Anything', 20)).toBeNull()
+
+    const prompt = voiceAgentSystemPrompt('Example Company', { locale: 'en-IN' })
+    expect(prompt).toContain('Put the answer in voice-first order')
+    expect(prompt).toContain('first sentence must be a self-contained, natural spoken summary')
+    expect(prompt).toContain('place optional specifications, steps, and comparisons after it for the screen')
   })
 })
