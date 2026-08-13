@@ -46,6 +46,10 @@ export type Env = Cloudflare.Env & {
   SHOPIFY_CUSTOMER_CLIENT_ID?: string
   /** Optional comma-separated product and brand vocabulary boosted by streaming speech recognition. */
   ABLE_VOICE_KEYTERMS?: string
+  /** Deepgram API credential enabling an optional Indian-English Flux TTS voice. */
+  DEEPGRAM_API_KEY?: string
+  /** Optional Deepgram Flux TTS voice model; defaults to flux-priya-en. */
+  ABLE_VOICE_TTS_MODEL?: string
   /** Local-parity guard: streaming Workers AI WebSockets require remote Worker execution. */
   ABLE_LOCAL_VOICE_UNAVAILABLE?: string
   /** Meta callback token used only for the WhatsApp webhook GET challenge. */

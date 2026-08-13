@@ -12,6 +12,9 @@
 # Optional recognition hints for the development catalog. Use public product
 # and brand vocabulary only; do not put customer data here.
 # ABLE_VOICE_KEYTERMS=Example Brand,Example Model,espresso grinder
+# Optional Indian-English voice. Use a dedicated development Deepgram key only.
+# DEEPGRAM_API_KEY=
+# ABLE_VOICE_TTS_MODEL=flux-priya-en
 
 
 # Authenticated order lookup through a least-authority development app.

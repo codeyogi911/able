@@ -19,6 +19,14 @@ At this point the Worker is provisioned, but the support desk is intentionally n
 
 The browser support assistant is published as the public homepage at `/` when `ABLE_VOICE_DEMO_ENABLED` is `1`; `/voice` and `/demo/voice` redirect there. It requires the production Email Service, Turnstile, rate-limit, D1, R2, Workers AI, and `CUSTOMER_CAPABILITY_SECRET` bindings. A session-level Turnstile proof enables anonymous text or voice help. The assistant collects a rate-limited name and email in-thread only before an identity-bearing order, ticket, or human-review action. Those details are unverified contact information used to name tickets, scope order lookup, and deliver follow-up. If the assistant is disabled or its required production setup is incomplete, `/` fails safely back to the conventional portal.
 
+`DEEPGRAM_API_KEY` is an optional deployment secret for Indian-English Flux TTS;
+never put it in `vars` or a committed `.dev.vars` file. With the secret absent,
+or if Deepgram synthesis fails, the assistant uses Cloudflare-hosted Aura 2.
+`ABLE_VOICE_TTS_MODEL` may select a `flux-{voice}-en` model and defaults to
+`flux-priya-en`. Flux TTS is currently Early Access, so production rollout must
+retain Aura 2 fallback and verify first audio plus interruption in a deployed
+microphone canary.
+
 For an already-provisioned production Worker, use `npm run deploy:production`. It refuses a non-`main` Cloudflare Builds branch, applies pending additive D1 migrations, rebuilds the embedded MCP App, and then deploys the Worker.
 
 ### Cloudflare Workers Builds

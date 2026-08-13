@@ -1,8 +1,8 @@
 import { Agent, type Connection, type ConnectionContext, type WSMessage } from 'agents'
 import {
   withVoice,
-  WorkersAINova3STT,
-  WorkersAITTS,
+  WorkersAIFluxSTT,
+  type TTSProvider,
   type VoiceTurnContext,
 } from '@cloudflare/voice'
 import { stepCountIs, streamText, tool } from 'ai'
@@ -61,6 +61,13 @@ import {
 } from './orders'
 import { dedupAssistantText, recoverAssistantText } from './dedup'
 import {
+  DeepgramFluxTTS,
+  FallbackTTS,
+  VOICE_OUTPUT_SAMPLE_RATE,
+  WorkersAIPcmTTS,
+  deepgramFluxTTSModel,
+} from './deepgram-flux-tts'
+import {
   SHOPIFY_CUSTOMER_SESSION_COOKIE,
   shopifyCustomerConfigured,
   shopifyCustomerContext,
@@ -68,7 +75,12 @@ import {
   type ShopifyCustomerSession,
 } from '../identity/shopify-customer'
 
-const VoiceAgent = withVoice(Agent, { historyLimit: 16, maxMessageCount: 80 })
+const VoiceAgent = withVoice(Agent, {
+  historyLimit: 16,
+  maxMessageCount: 80,
+  audioFormat: 'pcm16',
+  sampleRate: VOICE_OUTPUT_SAMPLE_RATE,
+})
 const LOCAL_SECRET = 'able-local-capability-secret-not-for-production'
 
 function readShopifyCustomerCookie(request: Request): string | null {
@@ -148,19 +160,27 @@ export function voiceKeyterms(configured: string | undefined): string[] {
 }
 
 export class AbleDeskAgent extends VoiceAgent<Env> {
-  transcriber = new WorkersAINova3STT(this.env.AI, {
-    language: 'multi',
-    endpointingMs: 420,
-    utteranceEndMs: 900,
+  transcriber = new WorkersAIFluxSTT(this.env.AI, {
     keyterms: voiceKeyterms(this.env.ABLE_VOICE_KEYTERMS),
   })
 
-  tts = new WorkersAITTS(this.env.AI, {
-    model: '@cf/deepgram/aura-2-en',
-    speaker: 'harmonia',
-  })
+  tts: TTSProvider = this.#tts()
 
   #activeSpeaker: string | null = null
+
+  #tts(): TTSProvider {
+    const cloudflare = new WorkersAIPcmTTS(this.env.AI)
+    const apiKey = this.env.DEEPGRAM_API_KEY?.trim()
+    if (!apiKey) return cloudflare
+
+    return new FallbackTTS(
+      new DeepgramFluxTTS({
+        apiKey,
+        model: deepgramFluxTTSModel(this.env.ABLE_VOICE_TTS_MODEL),
+      }),
+      cloudflare,
+    )
+  }
 
   onConnect(connection: Connection, context: ConnectionContext): void {
     const url = new URL(context.request.url)

@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "able-test",
   "main": "src/worker.tsx",
-  "compatibility_date": "2026-07-18",
+  "compatibility_date": "2026-08-13",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "binding": "ASSETS",

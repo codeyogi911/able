@@ -26,7 +26,20 @@ The browser uses `VoiceClient` from `@cloudflare/voice`. Audio travels over a We
 
 - `@cf/deepgram/flux` for streaming speech-to-text and turn detection;
 - `@cf/zai-org/glm-4.7-flash` with thinking disabled for concise responses and tool selection;
-- `@cf/deepgram/aura-1` for text-to-speech.
+- `@cf/deepgram/aura-2-en` for default text-to-speech.
+
+Deployments can set the `DEEPGRAM_API_KEY` secret to use Deepgram's newer Flux
+TTS service for Indian-English playback. The default model is
+`flux-priya-en`; `ABLE_VOICE_TTS_MODEL` can select another Flux English voice.
+Audio uses Flux TTS's live WebSocket transport and streams as 24 kHz PCM, so
+playback can begin before synthesis completes and caller interruption still
+stops queued audio. Flux TTS is currently an Early Access Deepgram service;
+keep the Cloudflare fallback enabled and re-run deployed voice checks when its
+wire contract or voice catalog changes.
+If that provider is unavailable, playback falls back to the Cloudflare-hosted
+Aura 2 voice in the same PCM format instead of leaving the customer without audio. Provider errors
+are logged only as bounded status/reason fields and never include credentials
+or upstream response bodies.
 
 Every browser tab gets a random Durable Object instance name. The voice mixin keeps bounded conversation context in that object's SQLite storage. Ending a call, closing its WebSocket, or choosing **Start over** deletes the voice-message rows. The stated contact lasts only for the WebSocket connection.
 
@@ -60,12 +73,14 @@ response require Worker-side execution on Cloudflare; Wrangler's local remote
 AI binding currently proxies neither shape faithfully. Use an isolated deployed
 preview or the protected production deployment for end-to-end microphone tests.
 
-For India deployments, voice input uses Workers AI Nova-3 with `language: multi`
-so one call can move between Indian English and Hindi. Playback stays entirely
-on Workers AI using Aura-2 English with the calm customer-service voice
-`harmonia`. Ava understands and answers conversational Hinglish, but Aura-2's
-hosted English catalog does not currently include an Indian-accent or Hindi TTS
-voice; do not describe this deployment as native Indian speech.
+For India deployments, voice input uses Workers AI Flux because it is the
+Cloudflare Voice provider designed for conversational `withVoice` agents and
+includes model-native turn detection. The Cloudflare-hosted Flux endpoint does
+not currently expose Deepgram's multilingual model selector. Ava still
+understands Indian-English text and answers with Indian context. When the
+Deepgram secret is configured, playback uses an Indian-English Flux TTS voice;
+without it, Aura 2's hosted English catalog remains the fallback and must not be
+described as a native Indian voice.
 
 ## Conversation guardrails and evals
 
