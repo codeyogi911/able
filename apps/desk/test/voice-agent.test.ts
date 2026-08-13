@@ -62,6 +62,22 @@ async function customerCookie(name: string, email: string): Promise<string> {
 }
 
 describe('voice agent WebSocket boundary', () => {
+  it('accepts minimized answer feedback only after the session proof', async () => {
+    const socket = await connectAgent(`feedback-${crypto.randomUUID()}`)
+    try {
+      await proveSession(socket)
+      const received = nextMessage(socket, (message) => message.type === 'voice_feedback_received')
+      socket.send(JSON.stringify({ type: 'voice_feedback', assistantTurn: 1, rating: 'helpful' }))
+      await expect(received).resolves.toMatchObject({
+        type: 'voice_feedback_received',
+        assistantTurn: 1,
+        rating: 'helpful',
+      })
+    } finally {
+      socket.close()
+    }
+  })
+
   it('gates turns on the session proof', async () => {
     const socket = await connectAgent(`unproven-${crypto.randomUUID()}`)
     try {

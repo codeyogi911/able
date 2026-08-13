@@ -1,4 +1,23 @@
 import { VoiceClient, type TranscriptMessage, type VoiceStatus } from '@cloudflare/voice/client'
+import {
+  ArrowUp,
+  BookOpenText,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  FileSearch,
+  Headphones,
+  Mic,
+  PackageSearch,
+  Plus,
+  Sparkles,
+  ThumbsDown,
+  ThumbsUp,
+  Truck,
+  UserRound,
+  Wrench,
+  createIcons,
+} from 'lucide'
 import './demo.css'
 import { renderStreamingMarkdown } from '../ui/markdown-client'
 import { SIGN_IN_CONTINUATION } from './contact'
@@ -16,7 +35,7 @@ const elements = {
   transcript: required<HTMLOListElement>('#transcript'),
   landingPanel: required<HTMLElement>('#landing-panel'),
   landingForm: required<HTMLFormElement>('#landing-form'),
-  landingInput: required<HTMLInputElement>('#landing-input'),
+  landingInput: required<HTMLTextAreaElement>('#landing-input'),
   landingSubmit: required<HTMLButtonElement>('#landing-submit'),
   landingMicButton: required<HTMLButtonElement>('#landing-mic-button'),
   humanHelpButton: required<HTMLButtonElement>('#human-help-button'),
@@ -33,14 +52,39 @@ const elements = {
   micButton: required<HTMLButtonElement>('#mic-button'),
   muteButton: required<HTMLButtonElement>('#mute-button'),
   textForm: required<HTMLFormElement>('#text-form'),
-  textInput: required<HTMLInputElement>('#text-input'),
+  textInput: required<HTMLTextAreaElement>('#text-input'),
   textSubmit: required<HTMLButtonElement>('#text-form button[type="submit"]'),
   handoffCard: required<HTMLLIElement>('#handoff-card'),
   handoffCategory: required<HTMLElement>('#handoff-category'),
   handoffDescription: required<HTMLElement>('#handoff-description'),
   handoffReference: required<HTMLElement>('#handoff-reference'),
   handoffStatus: required<HTMLElement>('#handoff-status'),
+  voiceState: required<HTMLElement>('#voice-state'),
+  voiceStateCopy: required<HTMLElement>('#voice-state-copy'),
+  conversationStatus: required<HTMLElement>('#conversation-status'),
 }
+
+createIcons({
+  icons: {
+    ArrowUp,
+    BookOpenText,
+    ChevronDown,
+    ChevronRight,
+    Copy,
+    FileSearch,
+    Headphones,
+    Mic,
+    PackageSearch,
+    Plus,
+    Sparkles,
+    ThumbsDown,
+    ThumbsUp,
+    Truck,
+    UserRound,
+    Wrench,
+  },
+  attrs: { 'aria-hidden': 'true', 'stroke-width': 2 },
+})
 
 const supportTaskButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-support-message]')]
 const voiceInputAvailable = elements.app.dataset.voiceInput !== 'unavailable'
@@ -112,6 +156,12 @@ let resetReload: ReturnType<typeof setTimeout> | null = null
 let connectionDelayTimer: ReturnType<typeof setTimeout> | null = null
 let replyDelayTimer: ReturnType<typeof setTimeout> | null = null
 let replyTimeoutTimer: ReturnType<typeof setTimeout> | null = null
+let lastAnnouncedStatus = ''
+let previousClientStatus: VoiceStatus = client.status
+let pendingProductRevealAnchor: number | null = null
+const feedbackByTurn = new Map<number, 'helpful' | 'not_helpful'>()
+const feedbackPending = new Set<number>()
+let pendingFeedbackFocus: { assistantTurn: number; rating: 'helpful' | 'not_helpful' } | null = null
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 const viewportListenerAbort = new AbortController()
@@ -227,7 +277,73 @@ function srLabel(text: string): HTMLElement {
   return label
 }
 
-function messageRow(message: TranscriptMessage): HTMLLIElement {
+function announceStatus(text: string): void {
+  if (!text || text === lastAnnouncedStatus) return
+  lastAnnouncedStatus = text
+  elements.conversationStatus.textContent = text
+}
+
+function resizeComposerInput(input: HTMLTextAreaElement): void {
+  input.style.height = 'auto'
+  input.style.height = `${Math.min(input.scrollHeight, 112)}px`
+}
+
+function resetComposerInput(input: HTMLTextAreaElement): void {
+  input.value = ''
+  resizeComposerInput(input)
+}
+
+function answerActions(message: TranscriptMessage, assistantTurn: number): HTMLElement {
+  const actions = document.createElement('div')
+  actions.className = 'message-actions'
+  actions.setAttribute('aria-label', 'Answer actions')
+
+  for (const [rating, label, icon] of [
+    ['helpful', 'Helpful answer', 'thumbs-up'],
+    ['not_helpful', 'Not helpful', 'thumbs-down'],
+  ] as const) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'message-action'
+    button.dataset.assistantTurn = String(assistantTurn)
+    button.dataset.rating = rating
+    button.setAttribute('aria-label', label)
+    button.setAttribute('aria-pressed', String(feedbackByTurn.get(assistantTurn) === rating))
+    button.disabled = feedbackPending.has(assistantTurn)
+    const iconNode = document.createElement('i')
+    iconNode.setAttribute('data-lucide', icon)
+    iconNode.setAttribute('aria-hidden', 'true')
+    button.append(iconNode)
+    button.addEventListener('click', () => {
+      feedbackPending.add(assistantTurn)
+      pendingFeedbackFocus = { assistantTurn, rating }
+      client.sendJSON({ type: 'voice_feedback', assistantTurn, rating })
+      renderThread()
+    })
+    actions.append(button)
+  }
+
+  const copy = document.createElement('button')
+  copy.type = 'button'
+  copy.className = 'message-action'
+  copy.setAttribute('aria-label', 'Copy answer')
+  const copyIcon = document.createElement('i')
+  copyIcon.setAttribute('data-lucide', 'copy')
+  copyIcon.setAttribute('aria-hidden', 'true')
+  copy.append(copyIcon)
+  copy.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(message.text)
+      announceStatus('Answer copied.')
+    } catch {
+      announceStatus('The answer could not be copied. Select the text and copy it manually.')
+    }
+  })
+  actions.append(copy)
+  return actions
+}
+
+function messageRow(message: TranscriptMessage, index: number): HTMLLIElement {
   const assistant = message.role === 'assistant'
   const row = document.createElement('li')
   row.className = `answer-turn answer-turn--${assistant ? 'assistant' : 'user'}`
@@ -236,10 +352,12 @@ function messageRow(message: TranscriptMessage): HTMLLIElement {
   label.textContent = assistant ? 'Ava' : 'You'
   const copy = document.createElement('div')
   copy.className = 'turn-copy'
-  const text = document.createElement(assistant ? 'div' : 'h2')
+  const text = document.createElement(assistant ? 'div' : 'p')
   if (assistant) renderStreamingMarkdown(text, message.text)
   else text.textContent = message.text
   copy.append(srLabel(assistant ? 'Ava: ' : 'You: '), text)
+  const answerComplete = assistant && (index < latestMessages.length - 1 || (client.status === 'idle' && !awaitingReply))
+  if (answerComplete) copy.append(answerActions(message, index))
   row.append(label, copy)
   return row
 }
@@ -267,7 +385,7 @@ function queuedMessageRow(text: string): HTMLLIElement {
   label.textContent = 'You'
   const content = document.createElement('div')
   content.className = 'turn-copy'
-  const copy = document.createElement('h2')
+  const copy = document.createElement('p')
   copy.textContent = text
   content.append(srLabel('You: '), copy)
   row.append(label, content)
@@ -306,7 +424,7 @@ function systemNote(text: string): HTMLLIElement {
   return row
 }
 
-function sourcesRow(anchor: number, articles: SourceArticle[], open: boolean): HTMLLIElement {
+function sourcesRow(anchor: number, articles: SourceArticle[], open: boolean, showFollowUps: boolean): HTMLLIElement {
   const row = document.createElement('li')
   row.className = 'sources-row'
   const card = document.createElement('details')
@@ -314,7 +432,7 @@ function sourcesRow(anchor: number, articles: SourceArticle[], open: boolean): H
   card.dataset.anchor = String(anchor)
   card.open = open
   const summary = document.createElement('summary')
-  summary.textContent = `Based on (${articles.length})`
+  summary.textContent = `${articles.length} help-centre ${articles.length === 1 ? 'source' : 'sources'}`
   card.append(summary)
   const list = document.createElement('div')
   list.className = 'sources-list'
@@ -347,17 +465,21 @@ function sourcesRow(anchor: number, articles: SourceArticle[], open: boolean): H
     followUpList.append(prompt)
   }
   followUps.append(followUpLabel, followUpList)
-  row.append(card, followUps)
+  row.append(card)
+  if (showFollowUps) row.append(followUps)
   return row
 }
 
-function productsRow(items: ProductCard[]): HTMLLIElement {
+function productsRow(anchor: number, items: ProductCard[]): HTMLLIElement {
   const row = document.createElement('li')
   row.className = 'products-row'
-  const list = document.createElement('div')
+  row.dataset.anchor = String(anchor)
+  const list = document.createElement('ul')
   list.className = 'product-results'
   list.setAttribute('aria-label', 'Products from the storefront')
   for (const product of items) {
+    const item = document.createElement('li')
+    item.className = 'product-result-item'
     const card = document.createElement(product.url ? 'a' : 'article')
     card.className = 'product-result'
     if (card instanceof HTMLAnchorElement && product.url) {
@@ -366,11 +488,17 @@ function productsRow(items: ProductCard[]): HTMLLIElement {
       card.rel = 'noopener'
     }
     if (product.image) {
+      const media = document.createElement('span')
+      media.className = 'product-result-media'
       const image = document.createElement('img')
       image.src = product.image.url
       image.alt = product.image.altText
+      image.width = 480
+      image.height = 360
       image.loading = 'lazy'
-      card.append(image)
+      image.decoding = 'async'
+      media.append(image)
+      card.append(media)
     }
     const copy = document.createElement('span')
     copy.className = 'product-result-copy'
@@ -379,12 +507,38 @@ function productsRow(items: ProductCard[]): HTMLLIElement {
     const price = document.createElement('span')
     price.textContent = product.price
     const availability = document.createElement('small')
-    availability.textContent = product.availableForSale ? 'Available' : 'Currently unavailable'
+    availability.className = `product-availability ${product.availableForSale ? 'product-availability--available' : ''}`
+    availability.textContent = product.availableForSale ? 'Available now' : 'Currently unavailable'
     copy.append(title, price, availability)
+    if (product.url) {
+      const action = document.createElement('span')
+      action.className = 'product-action'
+      action.textContent = 'View product ↗'
+      copy.append(action)
+    }
     card.append(copy)
-    list.append(card)
+    item.append(card)
+    list.append(item)
   }
-  row.append(list)
+  const followUps = document.createElement('div')
+  followUps.className = 'product-follow-ups'
+  followUps.setAttribute('aria-label', 'Continue exploring products')
+  const prompts: Array<[string, string]> = [
+    ['Compare these products', 'Compare these products for me.'],
+    ['Best for a beginner?', 'Which of these is easiest for a beginner?'],
+    items.some((product) => product.price.includes('₹'))
+      ? ['Options under ₹30,000', 'Show me suitable options under ₹30,000.']
+      : ['Best-value option', 'Which of these is the best value?'],
+  ]
+  for (const [label, prompt] of prompts) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'follow-up-chip'
+    button.textContent = label
+    button.addEventListener('click', () => sendMessage(prompt))
+    followUps.append(button)
+  }
+  row.append(list, followUps)
   return row
 }
 
@@ -431,13 +585,19 @@ function renderThread(): void {
     for (const note of notes) {
       if (note.anchor <= length && note.anchor === index) rows.push(systemNote(note.text))
     }
+    for (const entry of products) {
+      if (entry.anchor <= length && entry.anchor === index) rows.push(productsRow(entry.anchor, entry.items))
+    }
     for (const entry of sources) {
       if (entry.anchor <= length && entry.anchor === index) {
-        rows.push(sourcesRow(entry.anchor, entry.articles, sourceOpenState.get(entry.anchor) ?? true))
+        const hasProductResults = products.some((productEntry) => productEntry.anchor === entry.anchor)
+        rows.push(sourcesRow(
+          entry.anchor,
+          entry.articles,
+          sourceOpenState.get(entry.anchor) ?? false,
+          entry.anchor === length && !hasProductResults,
+        ))
       }
-    }
-    for (const entry of products) {
-      if (entry.anchor <= length && entry.anchor === index) rows.push(productsRow(entry.items))
     }
     if (signinAnchor !== null && signinAnchor <= length && signinAnchor === index) {
       elements.signinFlow.hidden = false
@@ -452,7 +612,7 @@ function renderThread(): void {
     pushExtras(index)
     const message = latestMessages[index]!
     if (!(message.role === 'user' && hiddenTranscriptMessages.has(message.text))) {
-      rows.push(messageRow(message))
+      rows.push(messageRow(message, index))
     }
   }
   pushExtras(length)
@@ -463,6 +623,31 @@ function renderThread(): void {
   if (queuedMessage !== null && !queuedMessageSent) rows.push(typingRow('Connecting securely…'))
   else if (typing) rows.push(typingRow())
   elements.transcript.replaceChildren(...rows)
+  createIcons({
+    icons: { Copy, ThumbsDown, ThumbsUp },
+    attrs: { 'aria-hidden': 'true', 'stroke-width': 2 },
+  })
+  if (pendingFeedbackFocus !== null) {
+    const { assistantTurn, rating } = pendingFeedbackFocus
+    const selector = `.message-action[data-assistant-turn="${assistantTurn}"][data-rating="${rating}"]`
+    const feedbackButton = elements.transcript.querySelector<HTMLButtonElement>(selector)
+    if (feedbackButton && !feedbackButton.disabled) {
+      pendingFeedbackFocus = null
+      feedbackButton.focus({ preventScroll: true })
+    }
+  }
+  if (pendingProductRevealAnchor !== null) {
+    const productRow = elements.transcript.querySelector<HTMLElement>(`.products-row[data-anchor="${pendingProductRevealAnchor}"]`)
+    if (productRow) {
+      pendingProductRevealAnchor = null
+      requestAnimationFrame(() => {
+        const threadBox = elements.thread.getBoundingClientRect()
+        const rowTop = productRow.getBoundingClientRect().top - threadBox.top + elements.thread.scrollTop
+        elements.thread.scrollTo({ top: Math.max(0, rowTop - 250), behavior: 'auto' })
+      })
+      return
+    }
+  }
   if (stick) scrollToBottom()
 }
 
@@ -501,14 +686,32 @@ function updateControls(status: VoiceStatus): void {
   elements.muteButton.hidden = !callActive
   elements.muteButton.disabled = !ready || !callActive
   elements.clearButton.disabled = false
-  elements.app.setAttribute('aria-busy', String(awaitingReply || status === 'thinking'))
+  elements.transcript.setAttribute('aria-busy', String(awaitingReply || status === 'thinking'))
   elements.landingInput.disabled = false
-  elements.landingSubmit.disabled = !canAcceptMessage
+  elements.landingSubmit.disabled = !canAcceptMessage || elements.landingInput.value.trim() === ''
   for (const task of supportTaskButtons) task.disabled = !canAcceptMessage
   elements.humanHelpButton.disabled = false
   elements.textInput.disabled = false
-  elements.textSubmit.disabled = !canAcceptMessage
+  elements.textSubmit.disabled = !canAcceptMessage || elements.textInput.value.trim() === ''
   elements.conversationHumanButton.disabled = !canAcceptMessage
+  elements.app.dataset.voiceState = callActive ? status : 'off'
+  elements.voiceState.hidden = !callActive
+  if (callActive) {
+    const stateCopy = status === 'thinking'
+      ? 'Ava is thinking'
+      : status === 'speaking'
+        ? 'Ava is speaking'
+        : status === 'listening'
+          ? 'Listening…'
+          : 'Voice is on'
+    elements.voiceStateCopy.textContent = stateCopy
+    announceStatus(stateCopy)
+  }
+  if (status === 'idle' && previousClientStatus !== 'idle') {
+    const latestReply = [...latestMessages].reverse().find((message) => message.role === 'assistant')?.text.trim()
+    if (latestReply) announceStatus(`Ava: ${latestReply}`)
+  }
+  previousClientStatus = status
   const nowTyping = !replyFailed && (status === 'thinking' || awaitingReply)
   if (nowTyping !== typing) {
     typing = nowTyping
@@ -737,16 +940,18 @@ function renderCustomMessage(value: unknown): void {
         const safeUrl = safeArticleUrl(record.url)
         const rawImage = record.image && typeof record.image === 'object' ? record.image as Record<string, unknown> : null
         const imageUrl = safeArticleUrl(rawImage?.url)
-        const money = new Intl.NumberFormat('en-IN', {
-          style: 'currency',
-          currency: min.currencyCode,
-          maximumFractionDigits: 2,
-        })
         const low = Number(min.amount)
         const high = Number(max.amount)
+        const currencyCode = min.currencyCode
+        const formatMoney = (amount: number): string => new Intl.NumberFormat('en-IN', {
+          style: 'currency',
+          currency: currencyCode,
+          minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+          maximumFractionDigits: 2,
+        }).format(amount)
         const price = Number.isFinite(low) && Number.isFinite(high)
-          ? low === high ? money.format(low) : `${money.format(low)}–${money.format(high)}`
-          : `${min.currencyCode} ${min.amount}`
+          ? low === high ? formatMoney(low) : `${formatMoney(low)}–${formatMoney(high)}`
+          : `${currencyCode} ${min.amount}`
         return [{
           handle: record.handle,
           title: record.title,
@@ -762,9 +967,21 @@ function renderCustomMessage(value: unknown): void {
       .slice(0, 5)
     if (items.length > 0) {
       const anchor = afterReplyAnchor()
+      pendingProductRevealAnchor = anchor
       const existing = products.find((entry) => entry.anchor === anchor)
       if (existing) existing.items = items
       else products.push({ anchor, items })
+      renderThread()
+    }
+    return
+  }
+  if (message.type === 'voice_feedback_received') {
+    const assistantTurn = Number(message.assistantTurn)
+    const rating = message.rating
+    if (Number.isInteger(assistantTurn) && (rating === 'helpful' || rating === 'not_helpful')) {
+      feedbackPending.delete(assistantTurn)
+      feedbackByTurn.set(assistantTurn, rating)
+      announceStatus(rating === 'helpful' ? 'Marked as helpful. Thank you.' : 'Marked as not helpful. Thank you.')
       renderThread()
     }
     return
@@ -833,6 +1050,10 @@ client.addEventListener('transcriptchange', (messages) => {
   if (messages.length > 0) setConversationMode(true)
   updateControls(client.status)
   renderThread()
+  if (receivedReply && client.status === 'idle') {
+    const latestReply = [...messages].reverse().find((message) => message.role === 'assistant')?.text.trim()
+    if (latestReply) announceStatus(`Ava: ${latestReply}`)
+  }
 })
 client.addEventListener('interimtranscript', (text) => {
   interimText = text ?? ''
@@ -860,9 +1081,15 @@ client.addEventListener('error', (error) => {
 async function toggleVoice(): Promise<void> {
   if (!callActive) {
     setConversationMode(true)
-    await client.startCall()
-    callActive = true
-    pushNote('Voice on — speak naturally')
+    try {
+      await client.startCall()
+      callActive = true
+      pushNote('Voice on — speak naturally')
+    } catch {
+      callActive = false
+      pushNote('Microphone access did not start. Check your browser permission, then tap the microphone to try again.')
+      announceStatus('Microphone access did not start. Check your browser permission and try again.')
+    }
   } else {
     client.endCall()
     callActive = false
@@ -891,13 +1118,17 @@ elements.clearButton.addEventListener('click', () => {
   notes = []
   sources = []
   products = []
+  feedbackByTurn.clear()
+  feedbackPending.clear()
+  pendingProductRevealAnchor = null
+  pendingFeedbackFocus = null
   ticketAnchor = null
   elements.handoffCard.hidden = true
   hideSignInCard()
   interimText = ''
   typing = false
-  elements.landingInput.value = ''
-  elements.textInput.value = ''
+  resetComposerInput(elements.landingInput)
+  resetComposerInput(elements.textInput)
   signinReason = null
   setConversationMode(false, true)
   renderThread()
@@ -944,7 +1175,7 @@ elements.landingForm.addEventListener('submit', (event) => {
   const message = elements.landingInput.value.trim()
   if (!message) return
   elements.landingInput.blur()
-  if (sendMessage(message)) elements.landingInput.value = ''
+  if (sendMessage(message)) resetComposerInput(elements.landingInput)
 })
 
 elements.humanHelpButton.addEventListener('click', () => {
@@ -966,8 +1197,21 @@ elements.textForm.addEventListener('submit', (event) => {
   event.preventDefault()
   const message = elements.textInput.value.trim()
   if (!message) return
-  if (sendMessage(message)) elements.textInput.value = ''
+  if (sendMessage(message)) resetComposerInput(elements.textInput)
 })
+
+for (const input of [elements.landingInput, elements.textInput]) {
+  input.addEventListener('input', () => {
+    resizeComposerInput(input)
+    updateControls(client.status)
+  })
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
+    event.preventDefault()
+    input.form?.requestSubmit()
+  })
+  resizeComposerInput(input)
+}
 
 window.addEventListener('beforeunload', () => {
   viewportListenerAbort.abort()

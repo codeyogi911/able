@@ -251,6 +251,16 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
         }
         return
       }
+      if (parsed.type === 'voice_feedback') {
+        const assistantTurn = Number(parsed.assistantTurn)
+        const rating = parsed.rating
+        if (connectionState(connection).sessionProofPassed !== true
+          || !Number.isInteger(assistantTurn) || assistantTurn < 0 || assistantTurn >= 80
+          || (rating !== 'helpful' && rating !== 'not_helpful')) return
+        console.log(JSON.stringify({ event: 'voice_feedback', assistantTurn, rating }))
+        connection.send(JSON.stringify({ type: 'voice_feedback_received', assistantTurn, rating }))
+        return
+      }
       if (parsed.type !== 'clear_demo_session') return
       await this.#patchSession({
         pendingEscalation: null,
