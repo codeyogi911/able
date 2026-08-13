@@ -38,8 +38,15 @@ The command intentionally uses a hybrid Cloudflare development topology:
   account's inference quota. Wrangler's local remote-binding proxy does not
   preserve the raw response and WebSocket shapes required by Cloudflare Voice,
   so `dev:parity` deliberately disables the microphone instead of presenting a
-  silent call. Test Nova-3 STT and Aura-2 TTS on a deployed staging or production
+  silent call. Test Flux STT and Aura-2 TTS on a deployed staging or production
   Worker, where the code and AI binding both execute on Cloudflare.
+- Cloudflare Voice 0.3.5 still expects inbound microphone frames as
+  `ArrayBuffer`, while current Worker compatibility dates otherwise deliver
+  binary WebSocket messages as `Blob`. The committed Wrangler configuration
+  therefore carries Cloudflare's `no_websocket_standard_binary_type`
+  compatibility bridge. Keep it in every generated deployment configuration
+  until the published voice package accepts `Blob`; removing it silently drops
+  microphone audio before transcription.
 - D1, R2, queues, Durable Objects, Email Service, rate limits, and fixtures are
   local simulations. Email acceptance and edge security controls therefore
   need separate staging smoke tests.

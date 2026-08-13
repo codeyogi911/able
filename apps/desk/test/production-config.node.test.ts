@@ -73,6 +73,7 @@ describe('production Wrangler configuration', () => {
     expect(configured.r2_buckets[0]).toMatchObject({ bucket_name: variables.ABLE_R2_BUCKET_NAME })
     expect(configured.queues.producers[0].queue).toBe(variables.ABLE_MEDIA_QUEUE_NAME)
     expect(configured.queues.consumers[0].queue).toBe(variables.ABLE_MEDIA_QUEUE_NAME)
+    expect(configured.compatibility_flags).toContain('no_websocket_standard_binary_type')
   })
 
   it('rejects source text that is not valid JSONC', () => {

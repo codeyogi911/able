@@ -5,7 +5,15 @@
   "workers_dev": false,
   "preview_urls": false,
   "compatibility_date": "2026-08-13",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    // @cloudflare/voice 0.3.5 only forwards inbound microphone frames when
+    // Agents SDK delivers them as ArrayBuffer. Compatibility dates on or after
+    // 2026-03-17 otherwise deliver binary WebSocket messages as Blob, which
+    // makes the voice mixin silently discard every audio frame. Remove this
+    // bridge once the published voice package handles Blob input.
+    "no_websocket_standard_binary_type"
+  ],
   "assets": {
     "binding": "ASSETS",
     "directory": "./public",
