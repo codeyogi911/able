@@ -89,6 +89,7 @@ export function voiceDemoPageResponse(
   const languageInvitation = indiaExperience
     ? ' English ya Hinglish—jismein aap comfortable hain.'
     : ''
+  const workspaceName = workspaceShortName(branding.displayName)
   const title = /\bsupport$/i.test(branding.displayName.trim())
     ? `${branding.displayName} — assistant`
     : `${branding.displayName} support assistant`
@@ -98,7 +99,7 @@ export function voiceDemoPageResponse(
   const favicon = branding.faviconUrl
     ? `\n    <link rel="icon" href="${escapeAttribute(branding.faviconUrl)}">`
     : ''
-  const avatar = `<span class="avatar" aria-hidden="true">${escapeText(monogram(branding.displayName))}</span>`
+  const avatar = '<span class="avatar avatar--ava" aria-hidden="true"><i data-lucide="sparkles"></i></span>'
   const orderTaskCopy = identity.customerName
     ? 'You’re signed in — Ava can pull up your recent orders.'
     : ordersEnabled && identity.configured
@@ -107,15 +108,16 @@ export function voiceDemoPageResponse(
         ? 'Share the order number and Ava will check it.'
         : 'Ask Ava for the available tracking steps.'
   const orderTaskMarkup = `<button class="support-task" type="button" data-support-message="I want to track my order." disabled>
-                  <span class="support-task-title">Track an order</span>
-                  <span class="support-task-copy">${orderTaskCopy}</span>
+                  <span class="support-task-icon" aria-hidden="true"><i data-lucide="truck"></i></span>
+                  <span><span class="support-task-title">Track an order</span>
+                  <span class="support-task-copy">${orderTaskCopy}</span></span>
                 </button>`
   const accountMarkup = identity.customerName
     ? `<details class="account-menu">
                 <summary aria-label="Account options for ${escapeAttribute(identity.customerName)}">
                   <span class="account-avatar" aria-hidden="true">${escapeText(monogram(identity.customerName).slice(0, 1))}</span>
                   <span class="account-name">${escapeText(identity.customerName)}</span>
-                  <span class="account-chevron" aria-hidden="true">⌄</span>
+                  <span class="account-chevron" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
                 </summary>
                 <div class="account-popover">
                   <p><strong>${escapeText(identity.customerName)}</strong><span>Store account</span></p>
@@ -123,8 +125,14 @@ export function voiceDemoPageResponse(
                 </div>
               </details>`
     : identity.configured
-      ? '<a class="account-signin" href="/auth/shopify/start">Sign in for order help</a>'
-      : ''
+      ? `<a class="account-signin" href="/auth/shopify/start" aria-label="Sign in for order help">
+          <span class="account-avatar account-avatar--anonymous" aria-hidden="true"><i data-lucide="user-round"></i></span>
+          <span class="account-signin-label">Sign in</span>
+        </a>`
+      : `<a class="account-signin" href="/requests/recover" aria-label="Find your support request">
+          <span class="account-avatar account-avatar--anonymous" aria-hidden="true"><i data-lucide="user-round"></i></span>
+          <span class="account-signin-label">My request</span>
+        </a>`
   const topicMarkup = topics.length > 0
     ? topics.slice(0, 9).map((topic) => `<section class="topic-card">
               <h3><a href="/kb?section=${encodeURIComponent(topic.slug)}">${escapeText(topic.name)}</a></h3>
@@ -155,13 +163,16 @@ export function voiceDemoPageResponse(
           <a class="brand" href="${escapeAttribute(branding.homeUrl ?? '/')}" aria-label="${escapeAttribute(`${branding.displayName} home`)}">
             ${brandVisual}
             <span class="brand-text">
-              <span class="brand-name">${escapeText(branding.displayName)}</span>
-              <span class="brand-sub">Support assistant</span>
+              <span class="brand-name">${escapeText(workspaceName)}</span>
+              <span class="brand-sub">Help</span>
             </span>
           </a>
           <div class="header-actions">
             <nav class="support-nav" aria-label="Support options">
-              <a class="help-centre-link" href="/kb">Help centre</a>
+              <a class="help-centre-link" href="/kb" aria-label="Help centre">
+                <i data-lucide="book-open-text" aria-hidden="true"></i>
+                <span class="nav-label">Help centre</span>
+              </a>
               ${accountMarkup}
             </nav>
           </div>
@@ -173,29 +184,49 @@ export function voiceDemoPageResponse(
       <main id="thread" class="thread" tabindex="-1">
         <div class="thread-inner">
           <div id="landing-panel" class="landing-panel">
-            <section class="landing-hero" aria-labelledby="help-title">
-              <h1 id="help-title">How can we help?</h1>
-              <p class="landing-lede">Ask Ava anything about ${escapeText(workspaceShortName(branding.displayName))}, start a common task, or open a private support request. She answers from our help articles and can bring in the team when you need them.${languageInvitation}</p>
-              <form id="landing-form" class="ask-composer">
-                <span class="ask-icon" aria-hidden="true">${avatar}</span>
-                <input id="landing-input" name="question" autocomplete="off" maxlength="500" placeholder="${askPlaceholder}" aria-label="${askPlaceholder}">
-                <button id="landing-mic-button" class="mic-button ask-mic-button" type="button" aria-label="${voiceInputAvailable ? 'Use voice' : 'Voice requires a deployed preview'}" title="${voiceInputAvailable ? 'Talk instead of typing' : 'Streaming voice is available on deployed Workers'}" disabled>
-                  <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path></svg>
-                </button>
-                <button id="landing-submit" type="submit" class="send-button ask-send-button" aria-label="Send question" disabled>
-                  <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>
-                </button>
-              </form>
-              <p class="landing-trust">${identity.customerName
-                ? `Signed in as ${escapeText(identity.customerName)}. Ava can use your store account for order help.`
-                : identity.configured
-                  ? 'Start anonymously — answers need no account. Sign in with your store account for order help or tickets.'
-                  : 'Start anonymously. Ava answers from the help centre; use the support form for follow-up.'}</p>
-              <p id="landing-status" class="landing-status" role="status" aria-live="polite">
-                <span class="connection-dot" aria-hidden="true"></span>
-                <span id="landing-status-copy">Ava is getting ready — you can ask now.</span>
-              </p>
-            </section>
+            <div class="landing-hero-layout">
+              <section class="landing-hero" aria-labelledby="help-title">
+                <p class="welcome-kicker"><i data-lucide="sparkles" aria-hidden="true"></i><span>Sales, support, and answers in one place</span></p>
+                <h1 id="help-title">How can we help?</h1>
+                <p class="landing-lede">Ask Ava about ${escapeText(workspaceName)} products, orders, or how-tos. She answers from our store and help centre, and brings in the team when you need them.${languageInvitation}</p>
+                <form id="landing-form" class="ask-composer">
+                  <span class="ask-icon" aria-hidden="true"><i data-lucide="sparkles"></i></span>
+                  <textarea id="landing-input" name="question" rows="1" autocomplete="off" maxlength="500" placeholder="${askPlaceholder}" aria-label="${askPlaceholder}"></textarea>
+                  <button id="landing-mic-button" class="mic-button ask-mic-button" type="button" aria-label="${voiceInputAvailable ? 'Use voice' : 'Voice requires a deployed preview'}" title="${voiceInputAvailable ? 'Talk instead of typing' : 'Streaming voice is available on deployed Workers'}" disabled>
+                    <i data-lucide="mic" aria-hidden="true"></i>
+                  </button>
+                  <button id="landing-submit" type="submit" class="send-button ask-send-button" aria-label="Send question" disabled>
+                    <i data-lucide="arrow-up" aria-hidden="true"></i>
+                  </button>
+                </form>
+                <p class="landing-trust">${identity.customerName
+                  ? `Signed in as ${escapeText(identity.customerName)}. Ava can use your store account for order help.`
+                  : identity.configured
+                    ? 'Start anonymously. Sign in only when you want order or private request help.'
+                    : 'Start anonymously. Ava answers from the help centre; use the support form for follow-up.'}</p>
+                <p id="landing-status" class="landing-status" role="status" aria-live="polite">
+                  <span class="connection-dot" aria-hidden="true"></span>
+                  <span id="landing-status-copy">Ava is getting ready — you can ask now.</span>
+                </p>
+              </section>
+
+              <aside class="welcome-visual" aria-label="Ava can help with products, orders, and support">
+                <div class="welcome-orb" aria-hidden="true">
+                  <span class="welcome-orb-ring welcome-orb-ring--one"></span>
+                  <span class="welcome-orb-ring welcome-orb-ring--two"></span>
+                  <span class="welcome-avatar">${avatar}</span>
+                </div>
+                <div class="welcome-copy">
+                  <p class="welcome-eyebrow"><span class="welcome-brand">${brandVisual}</span>Explore ${escapeText(workspaceName)}</p>
+                  <h2>Find the right product. Get help after.</h2>
+                </div>
+                <div class="welcome-capabilities" aria-hidden="true">
+                  <span><i data-lucide="package-search"></i>Product advice</span>
+                  <span><i data-lucide="truck"></i>Order help</span>
+                  <span><i data-lucide="book-open-text"></i>Clear how-tos</span>
+                </div>
+              </aside>
+            </div>
 
             <section class="support-tasks" aria-labelledby="support-tasks-title">
               <div class="support-tasks-heading">
@@ -203,27 +234,21 @@ export function voiceDemoPageResponse(
                 <h2 id="support-tasks-title">Choose a starting point</h2>
               </div>
               <div class="support-task-grid">
-                ${orderTaskMarkup}
-                <button class="support-task" type="button" data-support-message="My delivery is delayed." disabled>
-                  <span class="support-task-title">Delivery problem</span>
-                  <span class="support-task-copy">Tell Ava what is delayed and she’ll find the right next step.</span>
-                </button>
-                <button class="support-task" type="button" data-support-message="I need help with warranty or a repair." disabled>
-                  <span class="support-task-title">Warranty or repair</span>
-                  <span class="support-task-copy">Tell Ava what needs repair or what you want to claim.</span>
-                </button>
                 <button class="support-task support-task--featured" type="button" data-support-message="Help me choose the right product for my needs." disabled>
-                  <span class="support-task-title">Find the right product</span>
-                  <span class="support-task-copy">Tell Ava what you make, how often, and your budget. She’ll help narrow the options.</span>
+                  <span class="support-task-icon" aria-hidden="true"><i data-lucide="package-search"></i></span>
+                  <span><span class="support-task-title">Find the right product</span>
+                  <span class="support-task-copy">Share your needs and budget. Ava will narrow down the options.</span></span>
                 </button>
-                <button id="human-help-button" class="support-task support-task--contact" type="button" disabled>
-                  <span class="support-task-title">Contact support</span>
-                  <span class="support-task-copy">Describe your issue first. Sign-in is needed only when a private request is opened.</span>
+                ${orderTaskMarkup}
+                <button class="support-task" type="button" data-support-message="I need help with warranty or a repair." disabled>
+                  <span class="support-task-icon" aria-hidden="true"><i data-lucide="wrench"></i></span>
+                  <span><span class="support-task-title">Warranty or repair</span>
+                  <span class="support-task-copy">Tell Ava what happened and she’ll guide you to the next step.</span></span>
                 </button>
-                <a class="support-task" href="/requests/recover">
-                  <span class="support-task-title">Find a request</span>
-                  <span class="support-task-copy">Recover a private case link securely.</span>
-                </a>
+              </div>
+              <div class="support-secondary-actions">
+                <button id="human-help-button" type="button" disabled><i data-lucide="headphones" aria-hidden="true"></i><span><strong>Contact support</strong><small>Start with your issue; sign in only if a private request is needed.</small></span><i data-lucide="chevron-right" aria-hidden="true"></i></button>
+                <a href="/requests/recover"><i data-lucide="file-search" aria-hidden="true"></i><span><strong>Find a request</strong><small>Recover a private case link securely.</small></span><i data-lucide="chevron-right" aria-hidden="true"></i></a>
               </div>
             </section>
 
@@ -245,15 +270,19 @@ export function voiceDemoPageResponse(
               <span><strong>Ava</strong><small>Sales &amp; support assistant</small></span>
             </div>
             <div class="conversation-actions">
-              <button id="conversation-human-button" class="conversation-help-button" type="button">Contact support</button>
-              <button id="clear-button" class="new-conversation-button" type="button" hidden disabled>
-                <span aria-hidden="true">＋</span>
-                New conversation
+              <div class="conversation-account">${accountMarkup}</div>
+              <button id="conversation-human-button" class="conversation-help-button" type="button" aria-label="Contact support">
+                <i data-lucide="headphones" aria-hidden="true"></i>
+                <span>Contact support</span>
+              </button>
+              <button id="clear-button" class="new-conversation-button" type="button" aria-label="New conversation" hidden disabled>
+                <i data-lucide="plus" aria-hidden="true"></i>
+                <span>New conversation</span>
               </button>
             </div>
           </section>
 
-          <ol id="transcript" class="thread-list" role="log" aria-label="Conversation with Ava" aria-live="polite" hidden>
+          <ol id="transcript" class="thread-list" aria-label="Conversation with Ava" hidden>
             <li class="bubble-row bubble-row--assistant" id="signin-flow" hidden>
               ${avatar}
               <div class="bubble-stack">
@@ -283,18 +312,24 @@ export function voiceDemoPageResponse(
 
       <footer id="composer-bar" class="composer-bar" hidden>
         <div class="composer-inner">
+          <div id="voice-state" class="voice-state" hidden>
+            <span class="voice-state-dot" aria-hidden="true"></span>
+            <span id="voice-state-copy">Voice is on</span>
+          </div>
           <form id="text-form" class="composer">
-            <input id="text-input" name="message" autocomplete="off" maxlength="500" placeholder="Ask a follow-up…" aria-label="Ask a follow-up">
+            <span class="composer-sparkle" aria-hidden="true"><i data-lucide="sparkles"></i></span>
+            <textarea id="text-input" name="message" rows="1" autocomplete="off" maxlength="500" placeholder="Ask a follow-up…" aria-label="Ask a follow-up"></textarea>
             <button id="mic-button" class="mic-button" type="button" aria-label="Use voice" title="Talk instead of typing" disabled>
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path></svg>
+              <i data-lucide="mic" aria-hidden="true"></i>
             </button>
             <button id="mute-button" class="mute-button" type="button" hidden disabled>Mute</button>
             <button type="submit" class="send-button" aria-label="Send" disabled>
-              <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+              <i data-lucide="arrow-up" aria-hidden="true"></i>
             </button>
           </form>
         </div>
       </footer>
+      <p id="conversation-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
     </div>
   </body>
 </html>`, {

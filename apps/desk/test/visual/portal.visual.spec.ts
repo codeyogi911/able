@@ -148,6 +148,7 @@ async function installVoiceSocketFixture(
     holdSessionReady?: boolean
     signinReason?: 'order_lookup' | 'open_ticket'
     errorOnReply?: boolean
+    productResults?: boolean
   } = {},
 ): Promise<VoiceSocketFixture> {
   let socket: WebSocketRoute | null = null
@@ -159,6 +160,17 @@ async function installVoiceSocketFixture(
     socket?.send(JSON.stringify(message))
   }
   const sendReady = () => send({ type: 'voice_session_ready' })
+
+  if (options.productResults) {
+    await page.route(/\/visual-product-\d\.svg$/, async (route) => {
+      const productNumber = route.request().url().match(/(\d)\.svg$/)?.[1] ?? '1'
+      const fill = productNumber === '1' ? '#f1dfd1' : productNumber === '2' ? '#dde3df' : '#e7dfd9'
+      await route.fulfill({
+        contentType: 'image/svg+xml',
+        body: `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="360" viewBox="0 0 480 360"><rect width="480" height="360" fill="${fill}"/><rect x="130" y="70" width="220" height="210" rx="26" fill="#fff" stroke="#9f765b" stroke-width="5"/><circle cx="240" cy="142" r="46" fill="none" stroke="#9f765b" stroke-width="8"/><rect x="171" y="218" width="138" height="20" rx="10" fill="#9f765b"/><path d="M325 128h52v86c0 23-18 41-41 41h-11z" fill="none" stroke="#9f765b" stroke-width="8"/></svg>`,
+      })
+    })
+  }
 
   await page.routeWebSocket(/\/agents\/able-desk-agent\//, (route) => {
     socket = route
@@ -174,6 +186,10 @@ async function installVoiceSocketFixture(
       if (parsed.type === 'start_voice_session') {
         if (readyReleased) sendReady()
         else readyPending = true
+        return
+      }
+      if (parsed.type === 'voice_feedback') {
+        send({ type: 'voice_feedback_received', assistantTurn: parsed.assistantTurn, rating: parsed.rating })
         return
       }
       if (parsed.type !== 'text_message' || typeof parsed.text !== 'string') return
@@ -197,6 +213,37 @@ async function installVoiceSocketFixture(
           url: '/kb/care-and-troubleshooting-guide',
         }],
       })
+      if (turn === 1 && options.productResults) {
+        send({
+          type: 'voice_products',
+          products: [
+            {
+              handle: 'starter-machine',
+              title: 'Compact espresso machine for everyday home coffee',
+              availableForSale: true,
+              priceRange: { min: { amount: '29999', currencyCode: 'INR' }, max: { amount: '29999', currencyCode: 'INR' } },
+              url: '/products/starter-machine',
+              image: { url: '/visual-product-1.svg', altText: 'Compact espresso machine' },
+            },
+            {
+              handle: 'temperature-machine',
+              title: 'Espresso machine with temperature adjustment',
+              availableForSale: true,
+              priceRange: { min: { amount: '49999', currencyCode: 'INR' }, max: { amount: '52999', currencyCode: 'INR' } },
+              url: '/products/temperature-machine',
+              image: { url: '/visual-product-2.svg', altText: 'Temperature-adjustable espresso machine' },
+            },
+            {
+              handle: 'pro-machine',
+              title: 'Professional dual-boiler espresso machine',
+              availableForSale: false,
+              priceRange: { min: { amount: '89999', currencyCode: 'INR' }, max: { amount: '89999', currencyCode: 'INR' } },
+              url: '/products/pro-machine',
+              image: { url: '/visual-product-3.svg', altText: 'Professional espresso machine' },
+            },
+          ],
+        })
+      }
       send({ type: 'transcript_start' })
       send({ type: 'transcript_end', text: answer })
       send({ type: 'status', status: 'idle' })
@@ -220,7 +267,7 @@ async function openDeterministicConversation(page: Page): Promise<void> {
 
   await page.getByLabel('Ask anything').fill('How should I care for my machine?')
   await page.getByRole('button', { name: 'Send question' }).click()
-  await expect(page.getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
+  await expect(page.getByLabel('Conversation with Ava').getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
 
   for (const [index, question] of [
     'What should I inspect first?',
@@ -228,7 +275,7 @@ async function openDeterministicConversation(page: Page): Promise<void> {
   ].entries()) {
     await page.getByLabel('Ask a follow-up').fill(question)
     await page.locator('#text-form').getByRole('button', { name: 'Send' }).click()
-    await expect(page.getByText(`Deterministic support answer ${index + 2}.`, { exact: false })).toBeVisible()
+    await expect(page.getByLabel('Conversation with Ava').getByText(`Deterministic support answer ${index + 2}.`, { exact: false })).toBeVisible()
   }
 }
 
@@ -258,6 +305,7 @@ test('support home opens with the agent as the primary help experience', async (
   await expect(page).toHaveTitle(/Able Desk support assistant/)
   await expect(page.getByRole('heading', { level: 1, name: 'How can we help?' })).toBeVisible()
   await expect(page.getByLabel('Ask anything')).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Send question' })).toBeDisabled()
   await expect(page.getByRole('search')).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Help centre' })).toHaveAttribute('href', '/kb')
   await expect(page.getByRole('heading', { level: 2, name: 'Browse by topic' })).toBeVisible()
@@ -291,6 +339,33 @@ test('support home opens with the agent as the primary help experience', async (
   await screenshot(page, 'agent-home.png')
 })
 
+test('support header and welcome remain complete at 320px', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'The narrowest supported width is covered once.')
+  await page.setViewportSize({ width: 320, height: 700 })
+  await installVoiceSocketFixture(page)
+  await page.goto('/', { waitUntil: 'networkidle' })
+
+  await expect(page.getByRole('link', { name: 'Able Desk home' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Help centre' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Find your support request' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'How can we help?' })).toBeVisible()
+  await expect(page.getByLabel('Ask anything')).toBeVisible()
+  const header = await page.locator('.chat-header-inner').evaluate((element) => {
+    const brand = element.querySelector<HTMLElement>('.brand')?.getBoundingClientRect()
+    const actions = element.querySelector<HTMLElement>('.header-actions')?.getBoundingClientRect()
+    return { brandRight: brand?.right ?? 0, actionsLeft: actions?.left ?? 0 }
+  })
+  expect(header.brandRight).toBeLessThanOrEqual(header.actionsLeft)
+  await page.getByRole('link', { name: 'Help centre' }).focus()
+  const focusColors = await page.getByRole('link', { name: 'Help centre' }).evaluate((element) => ({
+    outline: getComputedStyle(element).outlineColor,
+    background: getComputedStyle(document.body).backgroundColor,
+  }))
+  expect(contrast(focusColors.outline, focusColors.background)).toBeGreaterThanOrEqual(3)
+  await expectNoHorizontalOverflow(page)
+  await expectMobileTargets(page, 320, '.support-nav a, .support-task, .support-secondary-actions > *')
+})
+
 test('the sign-in hand-off renders one card and no typed identity', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-390', 'The mobile sign-in handoff is covered once.')
   await installVoiceSocketFixture(page, { signinReason: 'order_lookup' })
@@ -300,7 +375,7 @@ test('the sign-in hand-off renders one card and no typed identity', async ({ pag
   await expect(page.getByText('Sign in to check your order', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Sign in with your store account' })).toBeVisible()
   await expect(page.getByText('Sign-in happens on the store’s own secure page.')).toBeVisible()
-  await expect(page.getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
+  await expect(page.getByLabel('Conversation with Ava').getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
   // Nothing in the chat asks the customer to type identity.
   await expect(page.locator('#transcript input')).toHaveCount(0)
 })
@@ -316,7 +391,7 @@ test('returning from sign-in resumes the conversation without leaking the contin
   await page.goto('/?signed_in=1', { waitUntil: 'networkidle' })
 
   // The continuation turn resumes the flow but stays out of the transcript.
-  await expect(page.getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
+  await expect(page.getByLabel('Conversation with Ava').getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
   await expect(page.getByText('I have signed in with my store account', { exact: false })).toHaveCount(0)
   await expect(page).toHaveURL(/\/$/)
 })
@@ -343,15 +418,16 @@ test('a first question queues immediately while the agent session becomes ready'
   const submit = page.getByRole('button', { name: 'Send question' })
 
   await expect(input).toBeEnabled()
-  await expect(submit).toBeEnabled()
+  await expect(submit).toBeDisabled()
   await expect(input).toHaveAttribute('placeholder', 'Ask anything')
   await input.fill('Keep this question while the session connects')
+  await expect(submit).toBeEnabled()
   await submit.click()
   await expect(page.getByText('Keep this question while the session connects', { exact: true })).toBeVisible()
   await expect(page.locator('.typing-copy', { hasText: 'Connecting securely…' })).toBeVisible()
 
   fixture.releaseSession()
-  await expect(page.getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
+  await expect(page.getByLabel('Conversation with Ava').getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
 })
 
 test('an agent error stops the activity state and offers a clear next step', async ({ page }, testInfo) => {
@@ -414,6 +490,17 @@ test('mobile conversation owns scrolling and keeps its composer in usable phone 
     })
   }, { height: initialViewport.height })
   await openDeterministicConversation(page)
+  await expect(page.getByRole('button', { name: 'Use voice' })).toBeVisible()
+  await expect(page.locator('.chat-header')).toBeHidden()
+  await expect(page.locator('#text-form')).toBeInViewport()
+  const pinnedToolbar = await page.locator('.conversation-toolbar').evaluate((toolbar) => {
+    const thread = document.querySelector<HTMLElement>('#thread')
+    return { toolbarTop: toolbar.getBoundingClientRect().top, threadTop: thread?.getBoundingClientRect().top ?? -1 }
+  })
+  expect(pinnedToolbar.toolbarTop).toBeGreaterThanOrEqual(pinnedToolbar.threadTop - 1)
+  if (process.env.ABLE_UI_REVIEW_SHOTS === '1') {
+    await page.screenshot({ path: `/tmp/able-conversation-${testInfo.project.name}.png` })
+  }
 
   const measureShell = () => page.evaluate(() => {
     const root = document.documentElement
@@ -492,6 +579,79 @@ test('mobile conversation owns scrolling and keeps its composer in usable phone 
     const metrics = await measureShell()
     return metrics.formGap >= 15 && metrics.formGap <= 20
   }).toBe(true)
+})
+
+test('storefront recommendations use readable semantic product cards', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'The responsive product carousel is covered once.')
+  await installVoiceSocketFixture(page, { productResults: true })
+  await page.goto('/', { waitUntil: 'networkidle' })
+
+  await page.getByLabel('Ask anything').fill('Suggest an espresso machine for home')
+  await page.getByRole('button', { name: 'Send question' }).click()
+
+  const products = page.locator('ul.product-results')
+  await expect(products).toBeVisible()
+  await expect(products.locator(':scope > li')).toHaveCount(3)
+  await expect(page.getByText('Compact espresso machine for everyday home coffee', { exact: true })).toBeVisible()
+  await expect(page.getByText('₹29,999', { exact: true })).toBeVisible()
+  await expect(page.getByText('₹49,999–₹52,999', { exact: true })).toBeVisible()
+  await expect(page.getByText('View product ↗', { exact: true }).first()).toBeVisible()
+  await expect(page.locator('.product-result img').first()).toHaveAttribute('width', '480')
+  await expect(page.locator('.product-result img').first()).toHaveAttribute('height', '360')
+  const geometry = await products.locator(':scope > li').first().evaluate((item) => ({
+    width: item.getBoundingClientRect().width,
+    imageHeight: item.querySelector<HTMLElement>('.product-result-media')?.getBoundingClientRect().height ?? 0,
+    viewport: window.innerWidth,
+  }))
+  expect(geometry.width).toBeGreaterThanOrEqual(260)
+  expect(geometry.width).toBeLessThan(geometry.viewport)
+  expect(geometry.imageHeight).toBeGreaterThanOrEqual(190)
+  expect(geometry.imageHeight).toBeLessThanOrEqual(210)
+  await expect(page.getByRole('button', { name: 'Compare these products' })).toBeVisible()
+  await expect(page.getByLabel('Conversation with Ava').getByText('Use the published care instructions below', { exact: false })).toBeInViewport()
+  await expect(page.locator('#text-form')).toBeInViewport()
+  const shell = await page.evaluate(() => {
+    const app = document.querySelector<HTMLElement>('#support-app')?.getBoundingClientRect()
+    const composer = document.querySelector<HTMLElement>('#composer-bar')?.getBoundingClientRect()
+    return { appTop: app?.top, appBottom: app?.bottom, composerTop: composer?.top, composerBottom: composer?.bottom, viewport: window.innerHeight }
+  })
+  expect(shell.appTop).toBe(0)
+  expect(shell.appBottom).toBe(shell.viewport)
+  expect(shell.composerBottom).toBeLessThanOrEqual(shell.viewport)
+  await expectNoHorizontalOverflow(page)
+  if (process.env.ABLE_UI_REVIEW_SHOTS === '1') {
+    await page.screenshot({ path: '/tmp/able-products-mobile-390.png' })
+  }
+})
+
+test('completed answers expose durable feedback without repeating the answer announcement', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'The answer completion behavior is covered once.')
+  await installVoiceSocketFixture(page)
+  await page.goto('/', { waitUntil: 'networkidle' })
+  await page.evaluate(() => {
+    const status = document.querySelector('#conversation-status')
+    if (!status) throw new Error('Conversation status is missing')
+    const announcements: string[] = []
+    Object.assign(window, { __supportAnnouncements: announcements })
+    new MutationObserver(() => {
+      if (status.textContent) announcements.push(status.textContent)
+    }).observe(status, { childList: true, characterData: true, subtree: true })
+  })
+
+  await page.getByLabel('Ask anything').fill('How should I care for my machine?')
+  await page.getByRole('button', { name: 'Send question' }).click()
+  await expect(page.getByRole('button', { name: 'Helpful answer' })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => (
+    (window as typeof window & { __supportAnnouncements: string[] }).__supportAnnouncements
+      .filter((value) => value.includes('Deterministic support answer 1.')).length
+  ))).toBe(1)
+
+  const helpful = page.getByRole('button', { name: 'Helpful answer' })
+  await helpful.focus()
+  await helpful.click()
+  await expect(helpful).toHaveAttribute('aria-pressed', 'true')
+  await expect(helpful).toBeFocused()
+  await expect(page.locator('#conversation-status')).toHaveText('Marked as helpful. Thank you.')
 })
 
 test('legacy voice route redirects to the agent home', async ({ page }) => {
