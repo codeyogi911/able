@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { createSentenceDedup, dedupAssistantText, dedupRepeatedSentences } from '../src/voice/dedup'
+import {
+  createSentenceDedup,
+  dedupAssistantText,
+  dedupRepeatedSentences,
+  recoverAssistantText,
+} from '../src/voice/dedup'
 
 describe('sentence dedup', () => {
   it('drops a verbatim repeated block within one turn', () => {
@@ -46,5 +51,29 @@ describe('sentence dedup', () => {
     expect(text).toBe('Let me look that up. Clean every 60 days.')
     expect(parts.some((part) => part.type === 'tool-call')).toBe(true)
     expect(parts.at(-1)?.type).toBe('finish')
+  })
+
+  it('turns provider error parts into an assistant fallback', async () => {
+    async function* stream() {
+      yield { type: 'start' }
+      yield { type: 'error', error: new Error('provider detail') }
+    }
+    const parts = []
+    for await (const part of recoverAssistantText(stream(), 'Please try again.')) parts.push(part)
+
+    expect(parts).toEqual([
+      { type: 'start' },
+      { type: 'text-delta', text: 'Please try again.' },
+    ])
+  })
+
+  it('turns thrown stream failures into an assistant fallback', async () => {
+    async function* stream() {
+      throw new Error('provider detail')
+    }
+    const parts = []
+    for await (const part of recoverAssistantText(stream(), 'Please try again.')) parts.push(part)
+
+    expect(parts).toEqual([{ type: 'text-delta', text: 'Please try again.' }])
   })
 })

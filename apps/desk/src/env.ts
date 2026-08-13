@@ -36,8 +36,22 @@ export type Env = Cloudflare.Env & {
   SHOPIFY_CLIENT_SECRET?: string
   /** Legacy custom-app Admin token; still honored as an alternative to the client credentials grant. */
   SHOPIFY_ADMIN_TOKEN?: string
+  /** Public Able UCP profile override for local parity; deployments derive it from the portal origin. */
+  SHOPIFY_UCP_AGENT_PROFILE_URL?: string
+  /** Optional ISO 3166-1 alpha-2 country used for localized Storefront prices and availability. */
+  SHOPIFY_STOREFRONT_COUNTRY?: string
+  /** Optional BCP 47 language tag used for localized Storefront content. */
+  SHOPIFY_STOREFRONT_LANGUAGE?: string
   /** Customer Account API public client ID enabling optional customer sign-in on the support portal. */
   SHOPIFY_CUSTOMER_CLIENT_ID?: string
+  /** Optional comma-separated product and brand vocabulary boosted by streaming speech recognition. */
+  ABLE_VOICE_KEYTERMS?: string
+  /** Deepgram API credential enabling an optional Indian-English Flux TTS voice. */
+  DEEPGRAM_API_KEY?: string
+  /** Optional Deepgram Flux TTS voice model; defaults to flux-priya-en. */
+  ABLE_VOICE_TTS_MODEL?: string
+  /** Local-parity guard: streaming Workers AI WebSockets require remote Worker execution. */
+  ABLE_LOCAL_VOICE_UNAVAILABLE?: string
   /** Meta callback token used only for the WhatsApp webhook GET challenge. */
   WHATSAPP_VERIFY_TOKEN?: string
   /** Meta app secret used to verify X-Hub-Signature-256 on webhook POSTs. */

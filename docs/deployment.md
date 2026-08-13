@@ -19,6 +19,14 @@ At this point the Worker is provisioned, but the support desk is intentionally n
 
 The browser support assistant is published as the public homepage at `/` when `ABLE_VOICE_DEMO_ENABLED` is `1`; `/voice` and `/demo/voice` redirect there. It requires the production Email Service, Turnstile, rate-limit, D1, R2, Workers AI, and `CUSTOMER_CAPABILITY_SECRET` bindings. A session-level Turnstile proof enables anonymous text or voice help. The assistant collects a rate-limited name and email in-thread only before an identity-bearing order, ticket, or human-review action. Those details are unverified contact information used to name tickets, scope order lookup, and deliver follow-up. If the assistant is disabled or its required production setup is incomplete, `/` fails safely back to the conventional portal.
 
+`DEEPGRAM_API_KEY` is an optional deployment secret for Indian-English Flux TTS;
+never put it in `vars` or a committed `.dev.vars` file. With the secret absent,
+or if Deepgram synthesis fails, the assistant uses Cloudflare-hosted Aura 2.
+`ABLE_VOICE_TTS_MODEL` may select a `flux-{voice}-en` model and defaults to
+`flux-priya-en`. Flux TTS is currently Early Access, so production rollout must
+retain Aura 2 fallback and verify first audio plus interruption in a deployed
+microphone canary.
+
 For an already-provisioned production Worker, use `npm run deploy:production`. It refuses a non-`main` Cloudflare Builds branch, applies pending additive D1 migrations, rebuilds the embedded MCP App, and then deploys the Worker.
 
 ### Cloudflare Workers Builds
@@ -98,7 +106,23 @@ Provider acceptance records the setup test as accepted. It does not prove inbox 
 
 Create a Turnstile widget for the portal hostname and expose only its site key through private workspace/deployment configuration. Keep the secret in Wrangler. The Worker also applies a rate-limit binding; production deployments should add appropriate WAF rules and bot controls for their risk profile.
 
-## 5a. Optional: store-account sign-in for order help
+## 5a. Optional: Shopify product discovery
+
+Set `SHOPIFY_SHOP_DOMAIN` in the deployment's private configuration to enable
+read-only shopping help against that merchant's Storefront Catalog MCP. The
+public portal serves Able's catalog-only UCP agent profile at
+`/.well-known/ucp`; Shopify fetches that profile during capability negotiation.
+No Storefront access token is used. Optional `SHOPIFY_STOREFRONT_COUNTRY` and
+`SHOPIFY_STOREFRONT_LANGUAGE` values provide provisional market and BCP 47
+language hints, while Shopify remains authoritative for current prices and
+availability. Do not cache catalog results or product images.
+
+Before enabling the feature, confirm that the public portal hostname returns
+the UCP profile, the development store's `/api/ucp/mcp` accepts that profile,
+and product search returns only the intended published catalog. A localhost
+profile is not sufficient because Shopify must fetch it from the public web.
+
+## 5b. Optional: store-account sign-in for order help
 
 When the deployment's Shopify store uses new customer accounts, the support
 portal can offer "Sign in for order help": a signed-in customer skips the

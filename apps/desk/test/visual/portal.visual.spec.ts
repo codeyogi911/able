@@ -147,6 +147,7 @@ async function installVoiceSocketFixture(
   options: {
     holdSessionReady?: boolean
     signinReason?: 'order_lookup' | 'open_ticket'
+    errorOnReply?: boolean
   } = {},
 ): Promise<VoiceSocketFixture> {
   let socket: WebSocketRoute | null = null
@@ -181,6 +182,10 @@ async function installVoiceSocketFixture(
       const answer = `Deterministic support answer ${turn}. Keep the machine unplugged while checking the removable parts. Use the published care instructions below, and stop if anything looks damaged.`
       send({ type: 'status', status: 'thinking' })
       send({ type: 'transcript', role: 'user', text: parsed.text })
+      if (options.errorOnReply) {
+        send({ type: 'error', message: 'Workers AI internal error' })
+        return
+      }
       if (turn === 1 && options.signinReason) {
         send({ type: 'voice_signin_required', anchor: 'after_reply', reason: options.signinReason })
       }
@@ -254,7 +259,7 @@ test('support home opens with the agent as the primary help experience', async (
   await expect(page.getByRole('heading', { level: 1, name: 'How can we help?' })).toBeVisible()
   await expect(page.getByLabel('Ask anything')).toBeEnabled()
   await expect(page.getByRole('search')).toHaveCount(0)
-  await expect(page.getByRole('link', { name: 'Browse help' })).toHaveAttribute('href', '/kb')
+  await expect(page.getByRole('link', { name: 'Help centre' })).toHaveAttribute('href', '/kb')
   await expect(page.getByRole('heading', { level: 2, name: 'Browse by topic' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Contact support' })).toBeEnabled()
 
@@ -329,30 +334,38 @@ test('contact support asks for the issue before it asks for identity', async ({ 
   await expect(page.getByLabel('Conversation with Ava')).toBeHidden()
 })
 
-test('mobile landing remains stable while the agent session becomes ready', async ({ page }, testInfo) => {
+test('a first question queues immediately while the agent session becomes ready', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-390', 'The delayed readiness lifecycle is covered at one phone viewport.')
   const fixture = await installVoiceSocketFixture(page, { holdSessionReady: true })
 
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   const input = page.getByLabel('Ask anything')
   const submit = page.getByRole('button', { name: 'Send question' })
-  const hero = page.locator('.landing-hero')
-  const before = await hero.evaluate((element) => element.getBoundingClientRect().top)
 
-  await expect(input).toBeEnabled()
-  await expect(submit).toBeDisabled()
-  await expect(input).toHaveAttribute('placeholder', 'Ask anything')
-  await input.fill('Keep this question while the session connects')
-  await expect(input).toHaveValue('Keep this question while the session connects')
-
-  fixture.releaseSession()
   await expect(input).toBeEnabled()
   await expect(submit).toBeEnabled()
   await expect(input).toHaveAttribute('placeholder', 'Ask anything')
-  await expect(input).toHaveValue('Keep this question while the session connects')
-  const after = await hero.evaluate((element) => element.getBoundingClientRect().top)
+  await input.fill('Keep this question while the session connects')
+  await submit.click()
+  await expect(page.getByText('Keep this question while the session connects', { exact: true })).toBeVisible()
+  await expect(page.locator('.typing-copy', { hasText: 'Connecting securely…' })).toBeVisible()
 
-  expect(Math.abs(after - before)).toBeLessThanOrEqual(1)
+  fixture.releaseSession()
+  await expect(page.getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
+})
+
+test('an agent error stops the activity state and offers a clear next step', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'The failed reply lifecycle is covered at one phone viewport.')
+  await installVoiceSocketFixture(page, { errorOnReply: true })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  await page.getByLabel('Ask anything').fill('Why is there no answer?')
+  await page.getByRole('button', { name: 'Send question' }).click()
+
+  await expect(page.getByText('Ava couldn’t finish that answer.', { exact: false })).toBeVisible()
+  await expect(page.locator('.typing-copy')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Contact support' })).toBeVisible()
+  await expect(page.getByText('Workers AI internal error')).toHaveCount(0)
 })
 
 test('an interactive mobile Turnstile challenge does not move the landing hero', async ({ page }, testInfo) => {
@@ -500,9 +513,9 @@ test('first question transitions into the focused answer experience', async ({ p
   await expect(page.locator('#landing-panel')).toBeHidden()
   await expect(page.locator('#transcript')).toBeVisible()
   await expect(page.getByLabel('Ask a follow-up')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Start over' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Start over' }).click()
+  await page.getByRole('button', { name: 'New conversation' }).click()
   await expect(page.locator('#support-app')).toHaveAttribute('data-view', 'landing')
   await expect(page.getByRole('heading', { level: 1, name: 'How can we help?' })).toBeVisible()
   await expect(page.getByLabel('Ask anything')).toBeEnabled()

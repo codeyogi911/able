@@ -79,6 +79,22 @@ describe('voice demo boundary', () => {
     expect(signedIn).not.toContain('href="/auth/shopify/start"')
   })
 
+  it('marks microphone input unavailable for local parity without disabling text chat', async () => {
+    const html = await voiceDemoPageResponse(
+      BRANDING,
+      '',
+      false,
+      [],
+      { configured: false, customerName: null },
+      'en-IN',
+      false,
+    ).text()
+
+    expect(html).toContain('data-voice-input="unavailable"')
+    expect(html).toContain('aria-label="Voice requires a deployed preview"')
+    expect(html).toContain('id="landing-input"')
+  })
+
   it('keeps the hosted store login as the only identity step', async () => {
     const html = await voiceDemoPageResponse(BRANDING, 'turnstile-site-key', true, [], { configured: true, customerName: null }).text()
 
@@ -113,19 +129,21 @@ describe('voice demo boundary', () => {
     expect(html).toContain('placeholder="Ask anything"')
     expect(html).toContain('data-support-message="My delivery is delayed."')
     expect(html).toContain('data-support-message="I need help with warranty or a repair."')
-    expect(html).toContain('data-support-message="I need help with my invoice."')
+    expect(html).toContain('data-support-message="Help me choose the right product for my needs."')
     expect(html).toContain('href="/requests/recover"')
     expect(html).toContain('placeholder="Ask a follow-up…"')
-    expect(html).toContain('Preparing secure chat…')
+    expect(html).toContain('data-connection="connecting"')
+    expect(html).toContain('Ava is getting ready — you can ask now.')
     expect(html).toContain('id="mic-button"')
     expect(html).toContain('id="landing-mic-button"')
     expect(html).toContain('aria-label="Use voice"')
     expect(html).toContain('title="Talk instead of typing"')
-    expect(html).toContain('Start over')
-    expect(html).toContain('href="/kb">Browse help</a>')
+    expect(html).toContain('New conversation')
+    expect(html).toContain('href="/kb">Help centre</a>')
     expect(html).toContain('id="human-help-button"')
     expect(html).toContain('id="conversation-human-button"')
-    expect(html).toContain('aria-label="Open a support request"')
+    expect(html).toContain('class="conversation-help-button" type="button">Contact support</button>')
+    expect(html).not.toContain('class="human-action-button"')
     expect(html).toContain('Describe your issue first. Sign-in is needed only when a private request is opened.')
     expect(html).toContain('id="reconnect-banner"')
     expect(html).not.toContain('class="privacy-note"')
@@ -141,6 +159,22 @@ describe('voice demo boundary', () => {
     expect(transcript).toBeGreaterThan(thread)
     expect(signinFlow).toBeGreaterThan(transcript)
     expect(composer).toBeGreaterThan(signinFlow)
+  })
+
+  it('invites India customers to use English or Hinglish', async () => {
+    const html = await voiceDemoPageResponse(
+      BRANDING,
+      'turnstile-site-key',
+      true,
+      [],
+      { configured: false, customerName: null },
+      'en-IN',
+    ).text()
+
+    expect(html).toContain('<html lang="en-IN">')
+    expect(html).toContain('English ya Hinglish—jismein aap comfortable hain.')
+    expect(html).toContain('placeholder="Ask in English or Hinglish"')
+    expect(html).toContain('aria-label="Ask in English or Hinglish"')
   })
 
   it('renders escaped live help topics with conventional knowledge links', async () => {

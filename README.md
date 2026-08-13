@@ -56,11 +56,20 @@ Requirements: Node.js 22 or 24+, npm, and a Cloudflare account for remote deploy
 
 ```sh
 npm install
-npm run db:migrate:local
-npm run dev
+npm run dev:parity
 ```
 
-Copy `apps/desk/.dev.vars.example` to `apps/desk/.dev.vars` for local-only values. Never commit the resulting file.
+`dev:parity` migrates and seeds a persistent local-only workspace, then runs the
+same Worker entry point and browser assistant used by a deployment. It uses
+remote Workers AI, so authenticate once with `npx wrangler login`. D1, R2,
+queues, Durable Objects, email, and all fixture data remain local. See
+[the development workflow](docs/development.md#production-like-local-assistant)
+for parity limits and optional development-store configuration.
+
+Copy `apps/desk/.dev.vars.parity.example` to `apps/desk/.dev.vars` only when
+local integrations need private values. Never commit the resulting file. The
+separate `.dev.vars.example` documents deployment setup and contains deliberate
+placeholders that must not be used by the parity server.
 
 Run the complete local gate before opening a pull request:
 

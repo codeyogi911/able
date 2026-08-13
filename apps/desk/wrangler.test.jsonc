@@ -2,12 +2,12 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "able-test",
   "main": "src/worker.tsx",
-  "compatibility_date": "2026-07-18",
+  "compatibility_date": "2026-08-13",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "binding": "ASSETS",
     "directory": "./public",
-    "run_worker_first": ["/", "/healthz", "/mcp", "/ops", "/ops/*", "/webhooks/whatsapp", "/kb*", "/requests*", "/workspace-theme.css", "/portal/*", "/voice", "/demo/voice", "/agents/*"]
+    "run_worker_first": ["/", "/healthz", "/.well-known/ucp", "/mcp", "/ops", "/ops/*", "/webhooks/whatsapp", "/kb*", "/requests*", "/workspace-theme.css", "/portal/*", "/voice", "/demo/voice", "/agents/*"]
   },
   "vars": {
     "ABLE_VOICE_DEMO_ENABLED": "0"

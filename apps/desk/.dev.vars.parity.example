@@ -1,0 +1,25 @@
+# Optional integrations for `npm run dev:parity`. Copy this file to `.dev.vars`
+# and uncomment only values backed by a dedicated development store. Never use
+# production credentials or customer data in the local parity workspace.
+
+# Public catalog discovery through Shopify's merchant-scoped UCP Catalog MCP.
+# Shopify must be able to fetch the profile URL, so localhost cannot be used.
+# SHOPIFY_SHOP_DOMAIN=development-store.myshopify.com
+# SHOPIFY_UCP_AGENT_PROFILE_URL=https://staging-support.example.test/.well-known/ucp
+# SHOPIFY_STOREFRONT_COUNTRY=IN
+# SHOPIFY_STOREFRONT_LANGUAGE=en
+
+# Optional recognition hints for the development catalog. Use public product
+# and brand vocabulary only; do not put customer data here.
+# ABLE_VOICE_KEYTERMS=Example Brand,Example Model,espresso grinder
+# Optional Indian-English voice. Use a dedicated development Deepgram key only.
+# DEEPGRAM_API_KEY=
+# ABLE_VOICE_TTS_MODEL=flux-priya-en
+
+
+# Authenticated order lookup through a least-authority development app.
+# SHOPIFY_CLIENT_ID=replace-with-development-client-id
+# SHOPIFY_CLIENT_SECRET=replace-with-development-client-secret
+
+# Optional Customer Account API sign-in rail.
+# SHOPIFY_CUSTOMER_CLIENT_ID=replace-with-development-customer-account-client-id

@@ -97,3 +97,41 @@ export async function* dedupAssistantText<Part extends { type: string }>(
     yield part
   }
 }
+
+/**
+ * Converts a provider-side stream failure into a short assistant reply.
+ *
+ * The AI SDK can surface provider failures either as an `error` part or by
+ * throwing while the stream is consumed. Passing either through leaves the
+ * Voice client with a user turn and no assistant turn. This boundary keeps
+ * provider details server-side and guarantees that the conversation returns
+ * to an actionable state.
+ */
+export async function* recoverAssistantText<Part extends { type: string }>(
+  stream: AsyncIterable<Part>,
+  fallback: string,
+  onError: () => void = () => {},
+): AsyncIterable<Part> {
+  let template: Part | null = null
+  const fallbackPart = (): Part => ({
+    ...(template ?? {} as Part),
+    type: 'text-delta',
+    text: fallback,
+  } as Part)
+
+  try {
+    for await (const part of stream) {
+      const candidate = part as { type: string; text?: unknown }
+      if (candidate.type === 'text-delta') template = part
+      if (candidate.type === 'error') {
+        onError()
+        yield fallbackPart()
+        return
+      }
+      yield part
+    }
+  } catch {
+    onError()
+    yield fallbackPart()
+  }
+}

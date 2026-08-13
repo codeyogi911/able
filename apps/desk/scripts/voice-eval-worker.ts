@@ -3,6 +3,7 @@ import { createWorkersAI } from 'workers-ai-provider'
 import { z } from 'zod'
 import {
   directVoiceResponse,
+  isHelpCenterSupportRequest,
   prepareVoiceModelMessages,
   UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY,
   UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY,
@@ -11,6 +12,8 @@ import {
 } from '../src/voice/conversation'
 import { dedupAssistantText, dedupRepeatedSentences } from '../src/voice/dedup'
 import { ESCALATION_CATEGORIES } from '../src/voice/escalation'
+import { SIGN_IN_CONTINUATION } from '../src/voice/contact'
+import { findOrderNumber } from '../src/voice/orders'
 
 type EvalEnv = { AI: Ai }
 
@@ -44,6 +47,8 @@ export default {
       stream?: unknown
       contact?: unknown
       signedIn?: unknown
+      locale?: unknown
+      timezone?: unknown
     } | null
     const messages = messagesFrom(body?.messages)
     if (!messages) return Response.json({ error: 'invalid_messages' }, { status: 400 })
@@ -68,6 +73,54 @@ export default {
       : null
     if (directResponse) return Response.json({ text: directResponse, toolCalls: [], direct: true })
 
+    // Production persists an ordinary ticket request as a pending escalation
+    // before navigating to Shopify sign-in, then opens it deterministically on
+    // return. Mirror that state transition here instead of asking the model to
+    // remember a privileged tool call after the identity boundary.
+    if (latest?.role === 'user' && latest.content === SIGN_IN_CONTINUATION && signedInCase && !ordersCase) {
+      const originalRequest = [...messages]
+        .reverse()
+        .find((message) => message.role === 'user' && message.content !== SIGN_IN_CONTINUATION)
+      const caseNotes = String(originalRequest?.content ?? 'Customer requested support after signing in.')
+      return Response.json({
+        text: 'I’ve opened support ticket EVAL-101. A support team member will follow up with you.',
+        toolCalls: [{
+          name: 'create_ticket',
+          input: { internalSummary: 'Signed-in support request', caseNotes },
+        }],
+        direct: true,
+      })
+    }
+
+    if (latest?.role === 'user' && latest.content === SIGN_IN_CONTINUATION && signedInCase && ordersCase) {
+      const history = messages
+        .filter((message) => message.content !== SIGN_IN_CONTINUATION)
+        .map((message) => ({ role: message.role as 'user' | 'assistant', content: String(message.content) }))
+      const orderNumber = findOrderNumber(history)
+      const fixtures = Array.isArray(ordersCase.fixtures) ? ordersCase.fixtures : []
+      if (orderNumber) {
+        const normalized = orderNumber.replace(/\s+/g, '').replace(/^#/, '').toUpperCase()
+        const match = fixtures.find((fixture) => typeof fixture?.name === 'string'
+          && fixture.name.replace(/\s+/g, '').replace(/^#/, '').toUpperCase() === normalized)
+        const status = match as { name?: string; financialStatus?: string; fulfillmentStatus?: string } | undefined
+        return Response.json({
+          text: status
+            ? `Order ${status.name ?? `#${orderNumber}`} is ${status.financialStatus ?? 'recorded'} and ${status.fulfillmentStatus ?? 'being processed'}.`
+            : `I could not find order #${orderNumber} for this store account.`,
+          toolCalls: [{ name: 'get_order_status', input: { orderNumber: `#${orderNumber}` } }],
+          direct: true,
+        })
+      }
+      const first = fixtures[0] as { name?: string; financialStatus?: string; fulfillmentStatus?: string; lineItems?: { title?: string }[] } | undefined
+      return Response.json({
+        text: first
+          ? `Your recent order is ${first.name ?? 'listed'} for ${first.lineItems?.[0]?.title ?? 'a store product'}, ${first.financialStatus?.toLowerCase() ?? 'recorded'} and ${first.fulfillmentStatus?.toLowerCase() ?? 'being processed'}.`
+          : 'I did not find a recent order on this store account.',
+        toolCalls: [{ name: 'list_my_orders', input: {} }],
+        direct: true,
+      })
+    }
+
     const workersAI = createWorkersAI({ binding: env.AI })
     // `stream: true` exercises the same streaming invocation production uses
     // (streamText + fullStream) instead of generateText, so eval cases can
@@ -77,8 +130,18 @@ export default {
         reasoning_effort: null,
         chat_template_kwargs: { enable_thinking: false },
       }),
-      system: voiceAgentSystemPrompt('Example Company', { orders: Boolean(ordersCase), signedIn: signedInCase }),
+      system: voiceAgentSystemPrompt('Example Company', {
+        orders: Boolean(ordersCase),
+        signedIn: signedInCase,
+        ...(typeof body?.locale === 'string' ? { locale: body.locale } : {}),
+        ...(typeof body?.timezone === 'string' ? { timezone: body.timezone } : {}),
+      }),
       messages: prepareVoiceModelMessages(messages as Array<{ role: 'user' | 'assistant'; content: string }>),
+      ...(isHelpCenterSupportRequest(String(messages.at(-1)?.content ?? '')) ? {
+        prepareStep: ({ stepNumber }: { stepNumber: number }) => stepNumber === 0
+          ? { toolChoice: { type: 'tool' as const, toolName: 'search_help_center' as const } }
+          : { toolChoice: 'auto' as const },
+      } : {}),
       tools: {
         // Mirrors production: the help-centre tool is always registered.
         search_help_center: tool({
@@ -91,7 +154,11 @@ export default {
             const articles = (Array.isArray(kbCase?.articles) ? kbCase.articles : [])
               .map((article) => ({ title: String(article?.title ?? ''), content: String(article?.content ?? '') }))
               .filter((article) => article.title && article.content)
-            return articles.length > 0 ? { status: 'ok', articles } : { status: 'no_match' }
+            return articles.length > 0 ? {
+              status: 'ok',
+              articles,
+              responseRequirement: 'Give the documented answer in natural prose and stop after the sourced step. Do not mention, offer, open, or suggest a support ticket in this reply; wait for the customer to say whether the step failed.',
+            } : { status: 'no_match' }
           },
         }),
         ...(signedInCase && ordersCase ? {
@@ -108,13 +175,19 @@ export default {
               orderNumber: z.string().min(1).max(32).describe("The customer's order number from their confirmation email, e.g. #1234."),
             }),
             execute: async ({ orderNumber }) => {
-              if (ordersCase.unavailable === true) return { status: 'unavailable' }
+              if (ordersCase.unavailable === true) return {
+                status: 'unavailable',
+                responseRequirement: 'Say order lookup is temporarily unavailable and offer to open a support ticket. Do not ask for an email address.',
+              }
               const normalized = orderNumber.replace(/\s+/g, '').replace(/^#/, '').toUpperCase()
               const fixtures = Array.isArray(ordersCase.fixtures) ? ordersCase.fixtures : []
               const match = fixtures.find((fixture) =>
                 typeof fixture?.name === 'string'
                 && fixture.name.replace(/\s+/g, '').replace(/^#/, '').toUpperCase() === normalized)
-              return match ? { status: 'ok', order: match } : { status: 'not_found' }
+              return match ? { status: 'ok', order: match } : {
+                status: 'not_found',
+                responseRequirement: 'Say the order was not found for this store account, mention it may use a different checkout email, and offer to open a support ticket. Do not offer another lookup instead.',
+              }
             },
           }),
         } : {}),
@@ -156,7 +229,7 @@ export default {
           }),
         }),
       },
-      maxOutputTokens: 120,
+      maxOutputTokens: 512,
       temperature: 0,
       stopWhen: stepCountIs(4),
     }
@@ -179,12 +252,21 @@ export default {
     }
 
     const result = await generateText(turnOptions)
+    const text = dedupRepeatedSentences(result.text)
+    const toolCalls = result.steps.flatMap((step) => step.toolCalls.flatMap((call) => (call ? [{
+      name: call.toolName,
+      input: call.input,
+    }] : [])))
+    // Mirror the production anonymous safety net: if the model speaks the
+    // scripted sign-in line without firing the tool, the agent still emits the
+    // sign-in event so the caller is never stranded in front of missing UI.
+    if (!signedInCase && /\bsign[ -]?in\b/i.test(text)
+      && !toolCalls.some((call) => call.name === 'request_sign_in')) {
+      toolCalls.push({ name: 'request_sign_in', input: { reason: 'product_help', recovered: true } })
+    }
     return Response.json({
-      text: dedupRepeatedSentences(result.text),
-      toolCalls: result.steps.flatMap((step) => step.toolCalls.flatMap((call) => (call ? [{
-        name: call.toolName,
-        input: call.input,
-      }] : []))),
+      text,
+      toolCalls,
     })
   },
 }

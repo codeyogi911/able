@@ -4,12 +4,12 @@
   "main": "src/worker.tsx",
   "workers_dev": false,
   "preview_urls": false,
-  "compatibility_date": "2026-07-18",
+  "compatibility_date": "2026-08-13",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "binding": "ASSETS",
     "directory": "./public",
-    "run_worker_first": ["/", "/healthz", "/mcp", "/ops", "/ops/*", "/webhooks/whatsapp", "/kb*", "/requests*", "/workspace-theme.css", "/portal/*", "/voice", "/demo/voice", "/agents/*", "/auth/*"]
+    "run_worker_first": ["/", "/healthz", "/.well-known/ucp", "/mcp", "/ops", "/ops/*", "/webhooks/whatsapp", "/kb*", "/requests*", "/workspace-theme.css", "/portal/*", "/voice", "/demo/voice", "/agents/*", "/auth/*"]
   },
   "vars": {
     "ABLE_VOICE_DEMO_ENABLED": "1"

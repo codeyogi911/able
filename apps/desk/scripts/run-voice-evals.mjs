@@ -102,6 +102,70 @@ try {
     console.log(`PASS support_scope: ${reply}`)
   }
 
+  const hinglishResult = await turn(
+    [{ role: 'user', content: 'Mujhe home espresso ke liye machine chahiye. Warranty kaise kaam karti hai?' }],
+    null,
+    {
+      locale: 'en-IN',
+      timezone: 'Asia/Kolkata',
+      kb: {
+        articles: [{
+          title: 'Machine warranty',
+          content: 'Espresso machines include a one-year limited warranty. Keep the original invoice for a claim.',
+        }],
+      },
+    },
+  )
+  const hinglishReply = String(hinglishResult.text ?? '')
+  const hinglishTools = Array.isArray(hinglishResult.toolCalls) ? hinglishResult.toolCalls : []
+  assert(
+    hinglishTools.some((call) => call?.name === 'search_help_center'),
+    `Hinglish warranty question must search the help centre: ${JSON.stringify(hinglishResult)}`,
+  )
+  assert(
+    /warranty/i.test(hinglishReply) && /one.year|1.year|ek saal/i.test(hinglishReply),
+    `Hinglish answer must preserve the grounded warranty fact: ${hinglishReply}`,
+  )
+  assert(
+    /\b(?:aap|hai|ka|ki|ke|mein|liye|rakhiye|hogi|kar)\b/i.test(hinglishReply),
+    `Hinglish question should receive a natural Hinglish answer: ${hinglishReply}`,
+  )
+  assertNoRepeatedSentence(hinglishReply, 'Hinglish reply')
+  console.log(`PASS india_hinglish_grounding: ${hinglishReply}`)
+
+  const hinglishTroubleshooting = await turn(
+    [{ role: 'user', content: 'DF54 grinder clean karne ke baad start nahi ho raha. Kya check karoon?' }],
+    null,
+    {
+      locale: 'en-IN',
+      timezone: 'Asia/Kolkata',
+      kb: {
+        articles: [{
+          title: 'Grinder not working after cleaning? Check the reassembly',
+          content: 'Unplug the grinder. Remove and reinstall the upper burr carrier, aligning its marks before locking it into place. Then reinstall the hopper and try power again.',
+        }],
+      },
+    },
+  )
+  const troubleshootingReply = String(hinglishTroubleshooting.text ?? '')
+  const troubleshootingTools = Array.isArray(hinglishTroubleshooting.toolCalls)
+    ? hinglishTroubleshooting.toolCalls
+    : []
+  assert(
+    troubleshootingTools.some((call) => call?.name === 'search_help_center'),
+    `Hinglish troubleshooting must search the help centre: ${JSON.stringify(hinglishTroubleshooting)}`,
+  )
+  assert(
+    /burr carrier|align|marks|reinstall/i.test(troubleshootingReply),
+    `Hinglish troubleshooting must use the returned reassembly step: ${troubleshootingReply}`,
+  )
+  assert(
+    !/no (?:direct )?guide|no information|koi (?:direct )?guide nahi|ticket (?:open|raise)/i.test(troubleshootingReply),
+    `A successful help result must not be described as missing: ${troubleshootingReply}`,
+  )
+  assertNoRepeatedSentence(troubleshootingReply, 'Hinglish troubleshooting reply')
+  console.log(`PASS india_hinglish_troubleshooting: ${troubleshootingReply}`)
+
   const intakeHistory = []
   const intakeResults = []
   intakeResults.push(await converse(intakeHistory, 'Can you open a new support'))
