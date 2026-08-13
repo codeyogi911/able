@@ -35,6 +35,7 @@ For an `en-IN` / `Asia/Kolkata` workspace, Ava understands Indian English, Hindi
 ## Agent capabilities
 
 - answer support questions grounded in the published knowledge base via `search_help_center`, with the matching articles linked in the UI;
+- search and inspect the deployment's live Shopify catalog through the merchant-scoped UCP Catalog MCP when configured, projecting only bounded shopper-visible fields and never caching catalog results or images;
 - create a real Helpdesk ticket addressed to the caller's stated contact;
 - automatically open a ticket when the deterministic escalation policy detects a serious issue;
 - speak the result and show newly created ticket references in the UI.
@@ -52,6 +53,19 @@ npm run dev
 ```
 
 Open `http://localhost:8787/`. The legacy `/voice` and `/demo/voice` routes permanently redirect there. The production flag is committed on; set `ABLE_VOICE_DEMO_ENABLED:0` as a kill switch when the channel must be withdrawn, which restores the conventional portal home.
+
+`npm run dev:parity` supports the complete text-agent flow but intentionally
+disables its microphone. Cloudflare Voice's Nova-3 stream and Aura-2 raw audio
+response require Worker-side execution on Cloudflare; Wrangler's local remote
+AI binding currently proxies neither shape faithfully. Use an isolated deployed
+preview or the protected production deployment for end-to-end microphone tests.
+
+For India deployments, voice input uses Workers AI Nova-3 with `language: multi`
+so one call can move between Indian English and Hindi. Playback stays entirely
+on Workers AI using Aura-2 English with the calm customer-service voice
+`harmonia`. Ava understands and answers conversational Hinglish, but Aura-2's
+hosted English catalog does not currently include an Indian-accent or Hindi TTS
+voice; do not describe this deployment as native Indian speech.
 
 ## Conversation guardrails and evals
 

@@ -2,16 +2,17 @@
 # and uncomment only values backed by a dedicated development store. Never use
 # production credentials or customer data in the local parity workspace.
 
-# Public catalog discovery. A Storefront token is needed only when this shop
-# does not support tokenless Storefront API access.
+# Public catalog discovery through Shopify's merchant-scoped UCP Catalog MCP.
+# Shopify must be able to fetch the profile URL, so localhost cannot be used.
 # SHOPIFY_SHOP_DOMAIN=development-store.myshopify.com
-# SHOPIFY_STOREFRONT_ACCESS_TOKEN=replace-with-development-storefront-token
+# SHOPIFY_UCP_AGENT_PROFILE_URL=https://staging-support.example.test/.well-known/ucp
 # SHOPIFY_STOREFRONT_COUNTRY=IN
-# SHOPIFY_STOREFRONT_LANGUAGE=EN
+# SHOPIFY_STOREFRONT_LANGUAGE=en
 
 # Optional recognition hints for the development catalog. Use public product
 # and brand vocabulary only; do not put customer data here.
 # ABLE_VOICE_KEYTERMS=Example Brand,Example Model,espresso grinder
+
 
 # Authenticated order lookup through a least-authority development app.
 # SHOPIFY_CLIENT_ID=replace-with-development-client-id

@@ -370,6 +370,15 @@ button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visibl
 .source-chip:hover { background: var(--accent-soft); }
 .source-chip span { color: var(--ink, #121212); font-size: 12.5px; font-weight: 650; }
 .source-chip small { color: var(--muted); font-size: 10.5px; }
+.products-row { margin-top: -6px; }
+.product-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.product-result { min-width: 0; overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; color: var(--ink, #121212); background: var(--card); text-decoration: none; }
+.product-result:hover { border-color: var(--accent-line); box-shadow: 0 8px 24px rgba(0,0,0,.07); }
+.product-result > img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--soft); }
+.product-result-copy { display: grid; gap: 4px; padding: 12px; }
+.product-result-copy strong { overflow: hidden; font-size: 13px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.product-result-copy > span { font-size: 12.5px; font-weight: 680; }
+.product-result-copy small { color: var(--muted); font-size: 10.5px; }
 .follow-up-prompts { margin-top: 9px; }
 .follow-up-prompts > p { margin: 0 0 7px; color: var(--muted); font-size: 12px; font-weight: 650; }
 .follow-up-list { display: flex; flex-wrap: wrap; gap: 7px; }

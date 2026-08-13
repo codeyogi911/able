@@ -81,16 +81,31 @@ describe('Able Desk Worker boundary', () => {
 
     const publicMcp = await SELF.fetch('https://support.example.test/mcp')
     const publicOps = await SELF.fetch('https://support.example.test/ops')
+    const publicUcpProfile = await SELF.fetch('https://support.example.test/.well-known/ucp')
     expect(publicMcp.status).toBe(404)
     expect(publicOps.status).toBe(404)
     expect(publicMcp.headers.get('cache-control')).toBe('no-store')
+    expect(publicUcpProfile.status).toBe(200)
+    expect(publicUcpProfile.headers.get('content-type')).toContain('application/json')
+    expect(await publicUcpProfile.json()).toEqual({
+      ucp: {
+        version: '2026-04-08',
+        capabilities: {
+          'dev.ucp.shopping.catalog.search': [{ version: '2026-04-08' }],
+          'dev.ucp.shopping.catalog.lookup': [{ version: '2026-04-08' }],
+          'dev.shopify.catalog': [{ version: '2026-04-08' }],
+        },
+      },
+    })
 
     const operatorHome = await SELF.fetch('https://operators.example.test/')
     const operatorKnowledge = await SELF.fetch('https://operators.example.test/kb')
     const operatorHealth = await SELF.fetch('https://operators.example.test/healthz')
+    const operatorUcpProfile = await SELF.fetch('https://operators.example.test/.well-known/ucp')
     expect(operatorHome.status).toBe(404)
     expect(operatorKnowledge.status).toBe(404)
     expect(operatorHealth.status).toBe(404)
+    expect(operatorUcpProfile.status).toBe(404)
 
     const operatorOps = await SELF.fetch('https://operators.example.test/ops')
     expect(operatorOps.status).toBe(200)

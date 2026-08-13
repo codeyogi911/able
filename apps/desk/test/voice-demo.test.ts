@@ -79,6 +79,22 @@ describe('voice demo boundary', () => {
     expect(signedIn).not.toContain('href="/auth/shopify/start"')
   })
 
+  it('marks microphone input unavailable for local parity without disabling text chat', async () => {
+    const html = await voiceDemoPageResponse(
+      BRANDING,
+      '',
+      false,
+      [],
+      { configured: false, customerName: null },
+      'en-IN',
+      false,
+    ).text()
+
+    expect(html).toContain('data-voice-input="unavailable"')
+    expect(html).toContain('aria-label="Voice requires a deployed preview"')
+    expect(html).toContain('id="landing-input"')
+  })
+
   it('keeps the hosted store login as the only identity step', async () => {
     const html = await voiceDemoPageResponse(BRANDING, 'turnstile-site-key', true, [], { configured: true, customerName: null }).text()
 

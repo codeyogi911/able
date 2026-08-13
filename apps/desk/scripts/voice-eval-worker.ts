@@ -3,6 +3,7 @@ import { createWorkersAI } from 'workers-ai-provider'
 import { z } from 'zod'
 import {
   directVoiceResponse,
+  isHelpCenterSupportRequest,
   prepareVoiceModelMessages,
   UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY,
   UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY,
@@ -136,6 +137,11 @@ export default {
         ...(typeof body?.timezone === 'string' ? { timezone: body.timezone } : {}),
       }),
       messages: prepareVoiceModelMessages(messages as Array<{ role: 'user' | 'assistant'; content: string }>),
+      ...(isHelpCenterSupportRequest(String(messages.at(-1)?.content ?? '')) ? {
+        prepareStep: ({ stepNumber }: { stepNumber: number }) => stepNumber === 0
+          ? { toolChoice: { type: 'tool' as const, toolName: 'search_help_center' as const } }
+          : { toolChoice: 'auto' as const },
+      } : {}),
       tools: {
         // Mirrors production: the help-centre tool is always registered.
         search_help_center: tool({
@@ -148,7 +154,11 @@ export default {
             const articles = (Array.isArray(kbCase?.articles) ? kbCase.articles : [])
               .map((article) => ({ title: String(article?.title ?? ''), content: String(article?.content ?? '') }))
               .filter((article) => article.title && article.content)
-            return articles.length > 0 ? { status: 'ok', articles } : { status: 'no_match' }
+            return articles.length > 0 ? {
+              status: 'ok',
+              articles,
+              responseRequirement: 'Give the documented answer in natural prose and stop after the sourced step. Do not mention, offer, open, or suggest a support ticket in this reply; wait for the customer to say whether the step failed.',
+            } : { status: 'no_match' }
           },
         }),
         ...(signedInCase && ordersCase ? {
@@ -165,13 +175,19 @@ export default {
               orderNumber: z.string().min(1).max(32).describe("The customer's order number from their confirmation email, e.g. #1234."),
             }),
             execute: async ({ orderNumber }) => {
-              if (ordersCase.unavailable === true) return { status: 'unavailable' }
+              if (ordersCase.unavailable === true) return {
+                status: 'unavailable',
+                responseRequirement: 'Say order lookup is temporarily unavailable and offer to open a support ticket. Do not ask for an email address.',
+              }
               const normalized = orderNumber.replace(/\s+/g, '').replace(/^#/, '').toUpperCase()
               const fixtures = Array.isArray(ordersCase.fixtures) ? ordersCase.fixtures : []
               const match = fixtures.find((fixture) =>
                 typeof fixture?.name === 'string'
                 && fixture.name.replace(/\s+/g, '').replace(/^#/, '').toUpperCase() === normalized)
-              return match ? { status: 'ok', order: match } : { status: 'not_found' }
+              return match ? { status: 'ok', order: match } : {
+                status: 'not_found',
+                responseRequirement: 'Say the order was not found for this store account, mention it may use a different checkout email, and offer to open a support ticket. Do not offer another lookup instead.',
+              }
             },
           }),
         } : {}),
@@ -213,7 +229,7 @@ export default {
           }),
         }),
       },
-      maxOutputTokens: 120,
+      maxOutputTokens: 512,
       temperature: 0,
       stopWhen: stepCountIs(4),
     }
@@ -236,12 +252,21 @@ export default {
     }
 
     const result = await generateText(turnOptions)
+    const text = dedupRepeatedSentences(result.text)
+    const toolCalls = result.steps.flatMap((step) => step.toolCalls.flatMap((call) => (call ? [{
+      name: call.toolName,
+      input: call.input,
+    }] : [])))
+    // Mirror the production anonymous safety net: if the model speaks the
+    // scripted sign-in line without firing the tool, the agent still emits the
+    // sign-in event so the caller is never stranded in front of missing UI.
+    if (!signedInCase && /\bsign[ -]?in\b/i.test(text)
+      && !toolCalls.some((call) => call.name === 'request_sign_in')) {
+      toolCalls.push({ name: 'request_sign_in', input: { reason: 'product_help', recovered: true } })
+    }
     return Response.json({
-      text: dedupRepeatedSentences(result.text),
-      toolCalls: result.steps.flatMap((step) => step.toolCalls.flatMap((call) => (call ? [{
-        name: call.toolName,
-        input: call.input,
-      }] : []))),
+      text,
+      toolCalls,
     })
   },
 }

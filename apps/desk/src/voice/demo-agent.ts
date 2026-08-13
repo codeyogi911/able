@@ -1,7 +1,7 @@
 import { Agent, type Connection, type ConnectionContext, type WSMessage } from 'agents'
 import {
   withVoice,
-  WorkersAIFluxSTT,
+  WorkersAINova3STT,
   WorkersAITTS,
   type VoiceTurnContext,
 } from '@cloudflare/voice'
@@ -31,11 +31,13 @@ import {
   budgetBundleReply,
   directVoiceResponse,
   inrBudgetFromTranscript,
+  isHelpCenterSupportRequest,
   isStorefrontShoppingRequest,
+  productDiscoveryReply,
   productComparisonReply,
   productComparisonTerms,
   prepareVoiceModelMessages,
-  spokenVoiceChunk,
+  speechText,
   UNDOCUMENTED_PRODUCT_FORM_REPLY,
   UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY,
   UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY,
@@ -47,6 +49,7 @@ import {
   getStorefrontProduct,
   searchStorefrontProducts,
   shopifyStorefrontConfigured,
+  shopifyStorefrontProfileUrl,
 } from '../integrations/shopify-storefront'
 import {
   bareOrderNumber,
@@ -145,15 +148,19 @@ export function voiceKeyterms(configured: string | undefined): string[] {
 }
 
 export class AbleDeskAgent extends VoiceAgent<Env> {
-  transcriber = new WorkersAIFluxSTT(this.env.AI, {
-    eotThreshold: 0.7,
+  transcriber = new WorkersAINova3STT(this.env.AI, {
+    language: 'multi',
+    endpointingMs: 420,
+    utteranceEndMs: 900,
     keyterms: voiceKeyterms(this.env.ABLE_VOICE_KEYTERMS),
   })
 
-  tts = new WorkersAITTS(this.env.AI, { speaker: 'asteria' })
+  tts = new WorkersAITTS(this.env.AI, {
+    model: '@cf/deepgram/aura-2-en',
+    speaker: 'harmonia',
+  })
 
   #activeSpeaker: string | null = null
-  #spokenTurns = new Map<string, { chunks: number; characters: number }>()
 
   onConnect(connection: Connection, context: ConnectionContext): void {
     const url = new URL(context.request.url)
@@ -185,13 +192,11 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
 
   onCallEnd(connection: Connection): void {
     if (this.#activeSpeaker === connection.id) this.#activeSpeaker = null
-    this.#spokenTurns.delete(connection.id)
     this.#clearHistory()
   }
 
   onClose(): void {
     this.#activeSpeaker = null
-    this.#spokenTurns.clear()
     // A dropped socket is not the end of the visit. Keep history and session
     // state for a grace period so the client's automatic reconnect resumes the
     // conversation mid-flow, then wipe everything if nobody came back.
@@ -243,20 +248,32 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     return bounded.length >= 2 ? bounded : null
   }
 
-  beforeSynthesize(text: string, connection: Connection): string | null {
-    const state = this.#spokenTurns.get(connection.id) ?? { chunks: 0, characters: 0 }
-    if (state.chunks >= 2 || state.characters >= 260) return null
-    const spoken = spokenVoiceChunk(text, 260 - state.characters)
-    if (!spoken) return null
-    this.#spokenTurns.set(connection.id, {
-      chunks: state.chunks + 1,
-      characters: state.characters + spoken.length,
-    })
-    return spoken
+  beforeSynthesize(text: string): string | null {
+    return speechText(text)
+  }
+
+  #showProducts(connection: Connection, products: Array<{
+    handle: string
+    title: string
+    availableForSale: boolean
+    priceRange: { min: { amount: string; currencyCode: string }; max: { amount: string; currencyCode: string } }
+    url: string | null
+    image: { url: string; altText: string | null } | null
+  }>): void {
+    connection.send(JSON.stringify({
+      type: 'voice_products',
+      products: products.map((product) => ({
+        handle: product.handle,
+        title: product.title,
+        availableForSale: product.availableForSale,
+        priceRange: product.priceRange,
+        url: product.url,
+        image: product.image,
+      })),
+    }))
   }
 
   async onTurn(transcript: string, context: VoiceTurnContext) {
-    this.#spokenTurns.set(context.connection.id, { chunks: 0, characters: 0 })
     const state = connectionState(context.connection)
     if (state.sessionProofPassed !== true) {
       context.connection.send(JSON.stringify({ type: 'voice_session_required' }))
@@ -319,8 +336,11 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       }
     }
 
+    const settings = await loadWorkspaceSettings(this.env.DB)
+    const storefrontOrigin = settings.portalBaseUrl ?? state.origin
     const ordersAvailable = shopifyConfigured(this.env)
-    const productsAvailable = shopifyStorefrontConfigured(this.env)
+    const storefrontProfileUrl = shopifyStorefrontProfileUrl(this.env, storefrontOrigin)
+    const productsAvailable = shopifyStorefrontConfigured(this.env, storefrontOrigin)
     if (!contact && ordersAvailable && signInAvailable && isOrderLookupRequest(transcript)) {
       await this.#patchSession({ pendingSignInReason: 'order_lookup' })
       this.#requestSignIn(context.connection, 'order_lookup')
@@ -352,6 +372,7 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     const requiresBundle = /\bmachine\b/i.test(transcript) && /\bgrinder\b/i.test(transcript)
     if (productsAvailable && maximumINR !== null && requiresBundle) {
       const productResult = await searchStorefrontProducts(this.env, 'machine grinder', {
+        profileUrl: storefrontProfileUrl,
         shopperBudget: { amount: maximumINR, currencyCode: 'INR' },
         requireBundle: true,
       })
@@ -369,8 +390,8 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     if (comparison) {
       const [firstTerm, secondTerm] = comparison
       const [firstResult, secondResult] = await Promise.all([
-        searchStorefrontProducts(this.env, firstTerm),
-        searchStorefrontProducts(this.env, secondTerm),
+        searchStorefrontProducts(this.env, firstTerm, { profileUrl: storefrontProfileUrl }),
+        searchStorefrontProducts(this.env, secondTerm, { profileUrl: storefrontProfileUrl }),
       ])
       if (firstResult.status === 'ok' && secondResult.status === 'ok') {
         const reply = productComparisonReply(firstTerm, firstResult.products, secondTerm, secondResult.products)
@@ -382,9 +403,24 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       return 'I could not verify both products in the storefront. Which one should I look up first?'
     }
 
+    if (productsAvailable && isStorefrontShoppingRequest(transcript)) {
+      const result = await searchStorefrontProducts(this.env, transcript, {
+        profileUrl: storefrontProfileUrl,
+        ...(maximumINR === null ? {} : { shopperBudget: { amount: maximumINR, currencyCode: 'INR' } }),
+      })
+      if (result.status === 'unavailable') return 'I cannot check the storefront right now. Please try again shortly.'
+      if (result.status === 'no_match') return 'I did not find a verified match in the storefront. What product type should I narrow this to?'
+      const visibleProducts = maximumINR === null
+        ? result.products
+        : result.products.filter((product) => product.priceRange.max.currencyCode === 'INR'
+          && Number(product.priceRange.max.amount) <= maximumINR)
+      this.#showProducts(context.connection, visibleProducts)
+      return productDiscoveryReply(result.products, maximumINR)
+        ?? 'I found matching products in the storefront. What matters most to you—budget, workflow, or size?'
+    }
+
     const ordersEnabled = ordersAvailable && contact !== null
     let signInRequested = false
-    const settings = await loadWorkspaceSettings(this.env.DB)
     const workersAI = createWorkersAI({ binding: this.env.AI })
     const result = streamText({
       model: workersAI(VOICE_AGENT_MODEL, {
@@ -401,10 +437,18 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
         timezone: settings.timezone,
       }),
       messages: prepareVoiceModelMessages(messages),
-      ...(productsAvailable && isStorefrontShoppingRequest(transcript) ? {
-        prepareStep: ({ stepNumber }: { stepNumber: number }) => stepNumber === 0
-            ? { toolChoice: { type: 'tool', toolName: 'search_storefront_products' } }
-            : { toolChoice: 'auto' as const },
+      ...((productsAvailable && isStorefrontShoppingRequest(transcript)) || isHelpCenterSupportRequest(transcript) ? {
+        prepareStep: ({ stepNumber }: { stepNumber: number }) => {
+          if (stepNumber !== 0) return { toolChoice: 'auto' as const }
+          return {
+            toolChoice: {
+              type: 'tool' as const,
+              toolName: productsAvailable && isStorefrontShoppingRequest(transcript)
+                ? 'search_storefront_products'
+                : 'search_help_center',
+            },
+          }
+        },
       } : {}),
       tools: {
         search_help_center: tool({
@@ -426,7 +470,11 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
                   url: `${base}/kb/${encodeURIComponent(article.slug)}`,
                 })),
               }))
-              return { status: 'ok', articles: articles.map(({ title, content }) => ({ title, content })) }
+              return {
+                status: 'ok',
+                articles: articles.map(({ title, content }) => ({ title, content })),
+                responseRequirement: 'Give the documented answer in natural prose and stop after the sourced step. Do not mention, offer, open, or suggest a support ticket in this reply; wait for the customer to say whether the step failed.',
+              }
             } catch {
               return { status: 'unavailable' }
             }
@@ -442,9 +490,13 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
               const maximumINR = inrBudgetFromTranscript(transcript)
               const requiresBundle = /\bmachine\b/i.test(transcript) && /\bgrinder\b/i.test(transcript)
               const result = await searchStorefrontProducts(this.env, requiresBundle ? 'machine grinder' : query, {
+                profileUrl: storefrontProfileUrl,
                 ...(maximumINR === null ? {} : { shopperBudget: { amount: maximumINR, currencyCode: 'INR' } }),
                 ...(requiresBundle ? { requireBundle: true } : {}),
               })
+              if (result.status === 'ok') {
+                this.#showProducts(context.connection, result.products)
+              }
               if (maximumINR === null || result.status !== 'ok') return result
               const withinBudget = result.products.filter((product) => {
                 if (product.priceRange.max.currencyCode !== 'INR') return false
@@ -466,12 +518,12 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
             },
           }),
           get_storefront_product: tool({
-            description: 'Fetch bounded public storefront detail for one product handle returned by search_storefront_products. Use when the caller selects a result or asks about its options, variants, price, availability, or description.',
+            description: 'Fetch bounded public storefront detail for one opaque product reference returned by search_storefront_products. Use when the caller selects a result or asks about its options, variants, price, availability, or description.',
             inputSchema: z.object({
-              handle: z.string().min(1).max(200).regex(/^[a-zA-Z0-9][a-zA-Z0-9-]*$/)
-                .describe('The exact opaque product handle returned by search_storefront_products.'),
+              reference: z.string().min(20).max(500).regex(/^shopify_product_[A-Za-z0-9_-]+$/)
+                .describe('The exact opaque product reference returned by search_storefront_products.'),
             }),
-            execute: async ({ handle }) => getStorefrontProduct(this.env, handle),
+            execute: async ({ reference }) => getStorefrontProduct(this.env, reference, { profileUrl: storefrontProfileUrl }),
           }),
         } : {}),
         ...(shopifyCustomer ? {
@@ -490,7 +542,18 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
             inputSchema: z.object({
               orderNumber: z.string().min(1).max(32).describe("The customer's order number from their confirmation email, e.g. #1234."),
             }),
-            execute: async ({ orderNumber }) => orderStatusForSession(this.env, { email: contact?.email ?? null }, orderNumber),
+            execute: async ({ orderNumber }) => {
+              const order = await orderStatusForSession(this.env, { email: contact?.email ?? null }, orderNumber)
+              if (order.status === 'not_found') return {
+                ...order,
+                responseRequirement: 'Say the order was not found for this store account, mention it may use a different checkout email, and offer to open a support ticket. Do not offer another lookup instead.',
+              }
+              if (order.status === 'unavailable') return {
+                ...order,
+                responseRequirement: 'Say order lookup is temporarily unavailable and offer to open a support ticket. Do not ask for an email address.',
+              }
+              return order
+            },
           }),
         } : {}),
         ...(contact ? {
@@ -556,7 +619,9 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
           } : {}),
         }),
       },
-      maxOutputTokens: 120,
+      // This bounds runaway model generation; TTS still speaks every generated
+      // sentence and never applies its own character or sentence cutoff.
+      maxOutputTokens: 512,
       temperature: 0,
       stopWhen: stepCountIs(4),
       abortSignal: context.signal,

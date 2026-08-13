@@ -34,8 +34,12 @@ customer record, attachment, resource ID, or secret is required.
 
 The command intentionally uses a hybrid Cloudflare development topology:
 
-- Workers AI is remote and consumes the authenticated account's inference
-  quota. It is the real model path used by the deployed Worker.
+- Text inference uses a remote Workers AI binding and consumes the authenticated
+  account's inference quota. Wrangler's local remote-binding proxy does not
+  preserve the raw response and WebSocket shapes required by Cloudflare Voice,
+  so `dev:parity` deliberately disables the microphone instead of presenting a
+  silent call. Test Nova-3 STT and Aura-2 TTS on a deployed staging or production
+  Worker, where the code and AI binding both execute on Cloudflare.
 - D1, R2, queues, Durable Objects, Email Service, rate limits, and fixtures are
   local simulations. Email acceptance and edge security controls therefore
   need separate staging smoke tests.
@@ -51,15 +55,18 @@ The command intentionally uses a hybrid Cloudflare development topology:
 
 For Shopify product-discovery parity, copy
 `apps/desk/.dev.vars.parity.example` to the ignored `apps/desk/.dev.vars` and
-set `SHOPIFY_SHOP_DOMAIN` to a dedicated development store. Add
-`SHOPIFY_STOREFRONT_ACCESS_TOKEN` when that shop does not allow tokenless
-Storefront API access. For order and customer-account testing, also supply the
+set `SHOPIFY_SHOP_DOMAIN` to a dedicated development store. Product discovery
+uses that merchant's unauthenticated UCP Catalog MCP endpoint. Because Shopify
+must fetch the agent profile, set `SHOPIFY_UCP_AGENT_PROFILE_URL` to the
+`/.well-known/ucp` route on a public staging Able deployment; localhost is not
+reachable by Shopify. For order and customer-account testing, also supply the
 corresponding least-authority development app values shown in the template.
 Never reuse production credentials. Product answers then use the development
 store's live published catalog; they will not match production unless the
-staging catalog intentionally contains equivalent neutral products. Do not
-copy `.dev.vars.example` for this workflow: that file documents deployment
-setup and its placeholders intentionally fail closed.
+staging catalog intentionally contains equivalent neutral products. Catalog
+results and images remain live provider data and are not cached. Do not copy
+`.dev.vars.example` for this workflow: that file documents deployment setup
+and its placeholders intentionally fail closed.
 
 Use plain `npm run dev` when you want to preserve and manage the default local
 Wrangler state yourself. Unlike `dev:parity`, it does not seed the support

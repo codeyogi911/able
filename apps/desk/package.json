@@ -49,14 +49,14 @@
       "SHOPIFY_CUSTOMER_CLIENT_ID": {
         "description": "Optional Customer Account API public client ID enabling store-account sign-in on the support portal."
       },
-      "SHOPIFY_STOREFRONT_ACCESS_TOKEN": {
-        "description": "Optional public Shopify Storefront API token for published product search; product discovery also supports Shopify's tokenless access."
+      "SHOPIFY_UCP_AGENT_PROFILE_URL": {
+        "description": "Optional public Able UCP profile URL for local parity; deployed agents derive /.well-known/ucp from the portal origin."
       },
       "SHOPIFY_STOREFRONT_COUNTRY": {
         "description": "Optional ISO country code used to localize public Shopify prices and availability, such as IN."
       },
       "SHOPIFY_STOREFRONT_LANGUAGE": {
-        "description": "Optional Shopify language code used to localize public storefront content, such as EN or HI."
+        "description": "Optional BCP 47 language tag used to localize public storefront content, such as en or hi."
       },
       "ABLE_VOICE_KEYTERMS": {
         "description": "Optional comma-separated product, brand, and place vocabulary boosted by voice recognition."

@@ -33,7 +33,8 @@ await run(['d1', 'migrations', 'apply', 'DB', '--local', '--persist-to', persist
 await run(['d1', 'execute', 'DB', '--local', '--persist-to', persistence, '--file', seed, '--config', config])
 
 console.log('Local production-like data is ready. Open http://127.0.0.1:8787/')
-console.log('Workers AI is remote; D1, R2, queues, Durable Objects, email, and customer data remain local.')
+console.log('Text inference uses remote Workers AI; D1, R2, queues, Durable Objects, email, and customer data remain local.')
+console.log('Streaming STT/TTS is unavailable through Wrangler remote bindings. Use a deployed staging or production Worker for microphone testing.')
 
 const server = spawn(wrangler, [
   'dev',
@@ -42,6 +43,7 @@ const server = spawn(wrangler, [
   '--persist-to', persistence,
   '--var', 'ABLE_DEV_EMAIL:owner@example.test',
   '--var', 'ABLE_VOICE_DEMO_ENABLED:1',
+  '--var', 'ABLE_LOCAL_VOICE_UNAVAILABLE:1',
   '--config', config,
 ], {
   cwd: root,

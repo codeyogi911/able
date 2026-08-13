@@ -9,16 +9,12 @@ export const UNDOCUMENTED_PRODUCT_FORM_REPLY =
 
 export type VoiceModelMessage = { role: 'user' | 'assistant'; content: string }
 
-const SPOKEN_RESPONSE_CHARACTER_LIMIT = 260
-
 /**
- * Turn one streamed response sentence into speech-friendly copy. The complete
- * model response still reaches the transcript; this projection prevents TTS
- * from reading Markdown syntax, URLs, and long visual detail verbatim.
+ * Remove visual-only syntax before TTS without shortening or dropping any
+ * sentence. The full Markdown response still reaches the on-screen transcript.
  */
-export function spokenVoiceChunk(text: string, remaining = SPOKEN_RESPONSE_CHARACTER_LIMIT): string | null {
-  if (remaining < 24) return null
-  const cleaned = text
+export function speechText(text: string): string | null {
+  const spoken = text
     .replace(/\[([^\]]+)]\([^\s)]+\)/g, '$1')
     .replace(/https?:\/\/\S+/gi, '')
     .replace(/^\s*(?:[-+*]|\d+[.)])\s+/gm, '')
@@ -27,21 +23,25 @@ export function spokenVoiceChunk(text: string, remaining = SPOKEN_RESPONSE_CHARA
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/:\s*$/, '.')
-  if (!cleaned) return null
-  if (cleaned.length <= remaining) return cleaned
-
-  const candidate = cleaned.slice(0, remaining - 1)
-  const boundary = candidate.lastIndexOf(' ')
-  const shortened = (boundary >= 48 ? candidate.slice(0, boundary) : candidate).trim()
-  return shortened ? `${shortened}.` : null
+  return spoken || null
 }
 
 const INCOMPLETE_SUPPORT_ACTION = /\b(?:open|create|raise|start)\s+(?:me\s+)?(?:a\s+)?(?:new\s+)?(?:support)?$/i
 const SENSITIVE_DATA_OFFER = /\b(?:tell|give|share|send|provide)\b.{0,60}\b(password|passcode|card number|security code|access token|government id)\b/i
-const STOREFRONT_SHOPPING_INTENT = /\b(?:buy|purchase|recommend|suggest|choose|compare|price|priced|cost|availability|available|in stock|stock|budget|cheaper|best|show me|do you have|looking for|find me|what should i (?:buy|get)|which .{0,40} should i (?:buy|get))\b/i
+const STOREFRONT_SHOPPING_INTENT = /\b(?:buy|purchase|recommend|suggest|choose|compare|price|priced|cost|availability|available|in stock|stock|budget|under|below|cheaper|best|show me|do you have|looking for|find|what should i (?:buy|get)|which .{0,40} should i (?:buy|get))\b/i
+const HELP_CENTER_SUPPORT_INTENT = /\b(?:how (?:do|can|should) i|troubleshoot|not working|doesn['’]?t work|won['’]?t (?:start|turn on|work)|warranty|shipping|delivery|returns?|refund policy|care|maintenance|clean|repair|fix|adjust|alignment|align|install|setup|set up|configure|use)\b/i
 
 export function isStorefrontShoppingRequest(transcript: string): boolean {
   return STOREFRONT_SHOPPING_INTENT.test(transcript.replace(/\s+/g, ' ').trim())
+}
+
+/**
+ * Identify turns that must be grounded in published support content. This is
+ * an orchestration guard, not merely a prompt hint: hosted models can
+ * otherwise skip the tool for unfamiliar or oddly worded products.
+ */
+export function isHelpCenterSupportRequest(transcript: string): boolean {
+  return HELP_CENTER_SUPPORT_INTENT.test(transcript.replace(/\s+/g, ' ').trim())
 }
 
 export function inrBudgetFromTranscript(transcript: string): number | null {
@@ -63,6 +63,49 @@ type BudgetBundleProduct = {
     min: { amount: string; currencyCode: string }
     max: { amount: string; currencyCode: string }
   }
+}
+
+function productPrice(product: BudgetBundleProduct): number | null {
+  if (product.priceRange.min.currencyCode !== 'INR' || product.priceRange.max.currencyCode !== 'INR') return null
+  const minimum = Number(product.priceRange.min.amount)
+  const maximum = Number(product.priceRange.max.amount)
+  return Number.isFinite(minimum) && minimum === maximum ? minimum : null
+}
+
+export function productDiscoveryReply(products: BudgetBundleProduct[], maximumINR: number | null): string | null {
+  const verified = products.filter((product) => {
+    const minimum = Number(product.priceRange.min.amount)
+    const maximum = Number(product.priceRange.max.amount)
+    return product.availableForSale
+      && product.priceRange.min.currencyCode === 'INR'
+      && product.priceRange.max.currencyCode === 'INR'
+      && Number.isFinite(minimum)
+      && Number.isFinite(maximum)
+      && minimum <= maximum
+  })
+  const matches = maximumINR === null
+    ? verified
+    : verified.filter((product) => Number(product.priceRange.max.amount) <= maximumINR)
+  const formatter = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  })
+  if (matches.length === 0) {
+    return maximumINR === null
+      ? 'I did not find a verified available match in the storefront. What product type should I narrow this to?'
+      : `I did not find a verified available match within ${formatter.format(maximumINR)}. Would you like to adjust the budget or the product type?`
+  }
+  const examples = matches.slice(0, 2).map((product) => {
+    const minimum = Number(product.priceRange.min.amount)
+    const maximum = Number(product.priceRange.max.amount)
+    const price = minimum === maximum
+      ? formatter.format(minimum)
+      : `${formatter.format(minimum)}–${formatter.format(maximum)}`
+    return `${product.title} at ${price}`
+  })
+  const budgetCopy = maximumINR === null ? '' : ` within ${formatter.format(maximumINR)}`
+  return `I found ${matches.length} available ${matches.length === 1 ? 'match' : 'matches'}${budgetCopy}, including ${examples.join(' and ')}. The cards show live prices and availability. What matters most to you—budget, workflow, or size?`
 }
 
 export function productComparisonTerms(transcript: string): [string, string] | null {
@@ -90,10 +133,7 @@ function bestNamedProduct(products: BudgetBundleProduct[], term: string): Budget
 }
 
 function inrPrice(product: BudgetBundleProduct): number | null {
-  if (product.priceRange.min.currencyCode !== 'INR' || product.priceRange.max.currencyCode !== 'INR') return null
-  const minimum = Number(product.priceRange.min.amount)
-  const maximum = Number(product.priceRange.max.amount)
-  return Number.isFinite(minimum) && minimum === maximum ? minimum : null
+  return productPrice(product)
 }
 
 function burrDescription(product: BudgetBundleProduct): string | null {
@@ -230,7 +270,7 @@ Format sourced INR amounts with ₹ and Indian digit grouping, dates as DD MMM Y
       ? `Identity is Shopify-first: before you can open a ticket, check an order, or hand off to a person, the caller must sign in with their store account. When the caller asks about their order, wants a ticket, needs human review, or has a product problem with no documented answer, call request_sign_in — it makes a sign-in button appear under your reply. The button exists only after request_sign_in returns, so never mention signing in without calling request_sign_in in the same turn. After it returns, reply with one short sentence such as "Sure — sign in below and I'll take care of that." If the help-centre search returned no_match, call request_sign_in with reason product_help and reply exactly: "${ordersAvailable ? UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY : UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY}" Never ask the caller to type their name, email, or password in the chat, and never claim a ticket or order lookup happened before the caller signed in.${orderCapability}`
       : `Store-account sign-in is not configured for this workspace, so no ticket, order lookup, or human hand-off can happen in this chat. When the caller needs one of those, reply exactly: "${UNDOCUMENTED_PRODUCT_FORM_REPLY}" and point them to the support request form. Never ask the caller to type their name or email in the chat.${orderCapability}`
   const productCapability = productsAvailable
-    ? `For shopping questions—finding, choosing, comparing, pricing, or checking the availability of a product—call search_storefront_products first. Search using concise catalog nouns from the customer's need or the product name. Answer only from returned storefront data; never invent specifications, compatibility, price, availability, variants, or recommendations. For a stated INR budget, use the tool's budgetEvidence: never claim a product fits unless its handle appears in withinBudgetHandles. For a multi-item setup, recommend only one returned bundle whose handle appears in bundleWithinBudgetHandles; never add separate product prices yourself or claim that separate products fit the total budget. If no qualifying result is returned, say you did not find a verified match within budget and ask one useful narrowing question. Shopping answers are plain speech in at most two short sentences with no Markdown list. When the caller selects one result or asks for its options or variants, call get_storefront_product with the exact handle returned by search. If search returns no_match, say you could not find a matching product in the storefront and ask one useful narrowing question. If it returns unavailable, say you cannot check the storefront right now. Name the best match, but never read, spell, or invent a URL.`
+    ? `For shopping questions—finding, choosing, comparing, pricing, or checking the availability of a product—call search_storefront_products first. Search using concise catalog nouns from the customer's need or the product name. Answer only from returned storefront data; never invent specifications, compatibility, price, availability, variants, or recommendations. For a stated INR budget, use the tool's budgetEvidence: never claim a product fits unless its handle appears in withinBudgetHandles. For a multi-item setup, recommend only one returned bundle whose handle appears in bundleWithinBudgetHandles; never add separate product prices yourself or claim that separate products fit the total budget. If no qualifying result is returned, say you did not find a verified match within budget and ask one useful narrowing question. Shopping answers are natural conversational prose with no Markdown list. The matching products are shown as cards, so say only the facts that answer the customer's question instead of reciting every returned field. When the caller selects one result or asks for its options or variants, call get_storefront_product with the exact opaque reference returned by search. If search returns no_match, say you could not find a matching product in the storefront and ask one useful narrowing question. If it returns unavailable, say you cannot check the storefront right now. Name the best match, but never read, spell, or invent a URL.`
     : ''
   const productSourceRouting = productsAvailable
     ? 'A product-support question uses the help centre; a shopping, selection, price, or catalog-availability question uses the storefront tools described above.'
@@ -245,15 +285,16 @@ A question about using the help centre, a private request link, or the support-r
 
 CAPABILITIES
 You can answer support questions from the published help-centre articles and open a support ticket for the caller. Never ask the user for their name or email in tool calls; identity is enforced by the server.
+When a tool is needed, call it before writing any reply. Never narrate that you are checking, searching, or looking something up before the tool result; write the customer-facing answer only after the result arrives.
 ${productCapability}
-For policy or warranty questions, call search_help_center first. For every how-to, product care, shipping, repair, or troubleshooting question, always call search_help_center first with a short topic query of two to six words. Do not ask the caller to identify or correct the product before that search. ${productSourceRouting} Even when you do not recognize the product or the question sounds unusual, search the appropriate source before deciding: never call a product or device question unsupported or out of scope without a search result for it, and never say you lack information unless the appropriate search already returned no_match in this turn. When search_help_center returns status ok with one or more articles, that is a documented answer: answer from the closest returned article and never say that no guide, no direct guide, or no information was found. If the closest guide is general rather than model-specific, say that precisely while still giving its sourced next step. Answer only from the returned article or storefront content in at most two short sentences. The matching help articles are shown to the caller as links automatically, so point them to the linked guide for the full steps. If help-centre search returns no_match, say you do not have a documented support answer for that and offer to open a ticket — do not answer such questions from memory. If it returns unavailable, say you cannot check the help articles right now and offer a ticket. Never include a help-centre URL in your reply — the matching articles are already linked for the caller.
+For policy or warranty questions, call search_help_center first. For every how-to, product care, shipping, repair, or troubleshooting question, always call search_help_center first with a short topic query of two to six words. Do not ask the caller to identify or correct the product before that search. ${productSourceRouting} Even when you do not recognize the product or the question sounds unusual, search the appropriate source before deciding: never call a product or device question unsupported or out of scope without a search result for it, and never say you lack information unless the appropriate search already returned no_match in this turn. When search_help_center returns status ok with one or more articles, that is a documented answer: answer from the closest returned article and never say that no guide, no direct guide, or no information was found. If the closest guide is general rather than model-specific, say that precisely while still giving its sourced next step. Answer only from the returned article or storefront content. The matching help articles are shown to the caller as links automatically, so give a complete useful answer in natural prose and point them to the linked guide when it contains additional steps. After a successful help result, end the reply after the documented answer. Do not mention or offer a ticket in that reply, even conditionally; wait for the customer to say whether the step worked. If help-centre search returns no_match, say you do not have a documented support answer for that and offer to open a ticket — do not answer such questions from memory. If it returns unavailable, say you cannot check the help articles right now and offer a ticket. Never include a help-centre URL in your reply — the matching articles are already linked for the caller.
 ${actionCapability}
 You cannot look up or report ticket status in this channel. If the caller asks about an existing ticket's status, say that updates arrive by email through their private case link and that you cannot check status here. Never invent or guess a status. Offer to open a new ticket only if they describe a new problem.
 
 CONVERSATION
 Sound like an experienced, calm support person, not a form or workflow. Briefly acknowledge the customer's situation before the next useful step, using plain and sincere language. Do not use canned enthusiasm.
 ${indiaExperience}
-Put the answer in voice-first order. The first sentence must be a self-contained, natural spoken summary with no heading, colon, or list; place optional specifications, steps, and comparisons after it for the screen. Never make the caller listen to a catalog-style list before hearing the answer.
+Everything you write is both shown and spoken. Give a complete answer in natural conversational prose, with no headings, tables, or lists. Never truncate a thought or turn tool output into a catalog-style recital. Select the facts that answer the customer, then offer the one most useful next step or question. Product cards and linked guides carry the remaining structured detail.
 Make any empathy specific to the problem or impact, and usually acknowledge it only once. Do not begin each reply with an apology or repeat generic reassurance. Specifically, never use stock transitions such as "let's get this moving." After the first acknowledgment, lead with the new fact learned, the answer, or the next useful question.
 Speech transcripts can be split at natural pauses. Treat a short latest message as a possible continuation of the preceding user message. Reconstruct the caller's meaning from the whole conversation, do not make them repeat themselves, and do not restart an answer that was already underway. If a transcript is clearly unfinished, say only "Go ahead, I'm listening."
 Ask at most one question per turn. Ask only for information that changes safety, diagnosis, or the next support action. Prefer a natural question such as "What happens when you press the power button?" Never ask the customer for a subject, short description, long description, ticket details, category, priority, or any other internal field.
@@ -270,5 +311,5 @@ Do not give a checklist when one focused question would move the case forward.
 SAFETY AND STYLE
 Never claim a phone call, refund, repair, or live human transfer occurred. A human-review ticket is not a live transfer. Never ask for passwords, card numbers, government IDs, access tokens, or other sensitive data.
 If the caller offers sensitive data, name the type they offered and clearly tell them not to share it. Continue with a safe troubleshooting question or human-review path that does not require the secret.
-Keep spoken answers to at most two short sentences. Start with a complete 4-to-10-word sentence so speech can begin quickly. Ask one clarifying question when necessary.`
+Let sentence length and answer length follow the customer's need. Use short, speakable sentences and finish the answer fully; never impose an arbitrary word, sentence, or character cutoff. Ask one clarifying question when necessary.`
 }

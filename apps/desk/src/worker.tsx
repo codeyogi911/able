@@ -33,6 +33,7 @@ import { verifyPublicWrite } from './security/public-write'
 import { isLocalUrl, requestSurface } from './security/operator-host'
 import { loadWorkspaceSettings, updateWorkspaceSettings, type WorkspaceSettings } from './settings'
 import { shopifyConfigured } from './integrations/shopify'
+import { SHOPIFY_UCP_PROFILE_PATH, shopifyUcpProfileResponse } from './integrations/shopify-storefront'
 import {
   beginShopifyCustomerLogin,
   completeShopifyCustomerLogin,
@@ -257,6 +258,7 @@ async function portalResponse(request: Request, env: Env, ctx: ExecutionContext)
         customerName: customerSession?.name ?? null,
       },
       settings.locale,
+      env.ABLE_LOCAL_VOICE_UNAVAILABLE !== '1',
     )
   }
   const helpdesk = createHelpdesk({
@@ -408,6 +410,9 @@ async function fetchHandler(request: Request, env: Env, ctx: ExecutionContext): 
     }
     if (url.pathname === '/healthz') {
       return Response.json({ status: 'ok' }, { headers: { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' } })
+    }
+    if (url.pathname === SHOPIFY_UCP_PROFILE_PATH) {
+      return shopifyUcpProfileResponse(request)
     }
     if ((url.pathname === '/voice' || url.pathname === '/demo/voice') && request.method === 'GET') {
       return Response.redirect(new URL('/', request.url), 308)

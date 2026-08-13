@@ -6,7 +6,7 @@ All notable changes to Able are documented in this file. The format follows [Kee
 
 ### Added
 
-- Nothing yet.
+- A public catalog-only UCP agent profile and Shopify Storefront Catalog MCP integration for bounded, live product search and detail.
 
 ## [0.1.0] - 2026-08-01
 

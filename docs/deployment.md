@@ -98,7 +98,23 @@ Provider acceptance records the setup test as accepted. It does not prove inbox 
 
 Create a Turnstile widget for the portal hostname and expose only its site key through private workspace/deployment configuration. Keep the secret in Wrangler. The Worker also applies a rate-limit binding; production deployments should add appropriate WAF rules and bot controls for their risk profile.
 
-## 5a. Optional: store-account sign-in for order help
+## 5a. Optional: Shopify product discovery
+
+Set `SHOPIFY_SHOP_DOMAIN` in the deployment's private configuration to enable
+read-only shopping help against that merchant's Storefront Catalog MCP. The
+public portal serves Able's catalog-only UCP agent profile at
+`/.well-known/ucp`; Shopify fetches that profile during capability negotiation.
+No Storefront access token is used. Optional `SHOPIFY_STOREFRONT_COUNTRY` and
+`SHOPIFY_STOREFRONT_LANGUAGE` values provide provisional market and BCP 47
+language hints, while Shopify remains authoritative for current prices and
+availability. Do not cache catalog results or product images.
+
+Before enabling the feature, confirm that the public portal hostname returns
+the UCP profile, the development store's `/api/ucp/mcp` accepts that profile,
+and product search returns only the intended published catalog. A localhost
+profile is not sufficient because Shopify must fetch it from the public web.
+
+## 5b. Optional: store-account sign-in for order help
 
 When the deployment's Shopify store uses new customer accounts, the support
 portal can offer "Sign in for order help": a signed-in customer skips the

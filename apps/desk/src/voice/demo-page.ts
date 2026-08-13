@@ -81,6 +81,7 @@ export function voiceDemoPageResponse(
   topics: VoiceHelpTopic[] = [],
   identity: VoiceIdentityView = { configured: false, customerName: null },
   locale = 'en',
+  voiceInputAvailable = true,
 ): Response {
   const indiaExperience = locale.toLowerCase() === 'en-in'
   const pageLanguage = indiaExperience ? 'en-IN' : 'en'
@@ -148,7 +149,7 @@ export function voiceDemoPageResponse(
   </head>
   <body>
     <a class="skip-link" href="#thread">Skip to support</a>
-    <div id="support-app" class="app" data-view="landing" data-connection="connecting">
+    <div id="support-app" class="app" data-view="landing" data-connection="connecting" data-voice-input="${voiceInputAvailable ? 'available' : 'unavailable'}">
       <header class="chat-header">
         <div class="chat-header-inner">
           <a class="brand" href="${escapeAttribute(branding.homeUrl ?? '/')}" aria-label="${escapeAttribute(`${branding.displayName} home`)}">
@@ -178,7 +179,7 @@ export function voiceDemoPageResponse(
               <form id="landing-form" class="ask-composer">
                 <span class="ask-icon" aria-hidden="true">${avatar}</span>
                 <input id="landing-input" name="question" autocomplete="off" maxlength="500" placeholder="${askPlaceholder}" aria-label="${askPlaceholder}">
-                <button id="landing-mic-button" class="mic-button ask-mic-button" type="button" aria-label="Use voice" title="Talk instead of typing" disabled>
+                <button id="landing-mic-button" class="mic-button ask-mic-button" type="button" aria-label="${voiceInputAvailable ? 'Use voice' : 'Voice requires a deployed preview'}" title="${voiceInputAvailable ? 'Talk instead of typing' : 'Streaming voice is available on deployed Workers'}" disabled>
                   <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path></svg>
                 </button>
                 <button id="landing-submit" type="submit" class="send-button ask-send-button" aria-label="Send question" disabled>

@@ -43,6 +43,7 @@ const elements = {
 }
 
 const supportTaskButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-support-message]')]
+const voiceInputAvailable = elements.app.dataset.voiceInput !== 'unavailable'
 
 const RESET_FOCUS_KEY = 'able-voice-support-reset-focus'
 
@@ -85,11 +86,20 @@ type SignInReason = 'order_lookup' | 'open_ticket'
 let signinReason: SignInReason | null = null
 
 type SourceArticle = { title: string; section: string; url: string }
+type ProductCard = {
+  handle: string
+  title: string
+  availableForSale: boolean
+  price: string
+  url: string | null
+  image: { url: string; altText: string } | null
+}
 
 let latestMessages: TranscriptMessage[] = []
 const hiddenTranscriptMessages = new Set<string>()
 let notes: { anchor: number; text: string }[] = []
 let sources: { anchor: number; articles: SourceArticle[] }[] = []
+let products: { anchor: number; items: ProductCard[] }[] = []
 let ticketAnchor: number | null = null
 let signinAnchor: number | null = null
 let interimText = ''
@@ -341,6 +351,43 @@ function sourcesRow(anchor: number, articles: SourceArticle[], open: boolean): H
   return row
 }
 
+function productsRow(items: ProductCard[]): HTMLLIElement {
+  const row = document.createElement('li')
+  row.className = 'products-row'
+  const list = document.createElement('div')
+  list.className = 'product-results'
+  list.setAttribute('aria-label', 'Products from the storefront')
+  for (const product of items) {
+    const card = document.createElement(product.url ? 'a' : 'article')
+    card.className = 'product-result'
+    if (card instanceof HTMLAnchorElement && product.url) {
+      card.href = product.url
+      card.target = '_blank'
+      card.rel = 'noopener'
+    }
+    if (product.image) {
+      const image = document.createElement('img')
+      image.src = product.image.url
+      image.alt = product.image.altText
+      image.loading = 'lazy'
+      card.append(image)
+    }
+    const copy = document.createElement('span')
+    copy.className = 'product-result-copy'
+    const title = document.createElement('strong')
+    title.textContent = product.title
+    const price = document.createElement('span')
+    price.textContent = product.price
+    const availability = document.createElement('small')
+    availability.textContent = product.availableForSale ? 'Available' : 'Currently unavailable'
+    copy.append(title, price, availability)
+    card.append(copy)
+    list.append(card)
+  }
+  row.append(list)
+  return row
+}
+
 function setConversationMode(active: boolean, focus = false): void {
   syncSupportViewport()
   elements.app.dataset.view = active ? 'conversation' : 'landing'
@@ -388,6 +435,9 @@ function renderThread(): void {
       if (entry.anchor <= length && entry.anchor === index) {
         rows.push(sourcesRow(entry.anchor, entry.articles, sourceOpenState.get(entry.anchor) ?? true))
       }
+    }
+    for (const entry of products) {
+      if (entry.anchor <= length && entry.anchor === index) rows.push(productsRow(entry.items))
     }
     if (signinAnchor !== null && signinAnchor <= length && signinAnchor === index) {
       elements.signinFlow.hidden = false
@@ -440,13 +490,13 @@ function updateControls(status: VoiceStatus): void {
   const busyWithoutCall = !callActive && status !== 'idle'
   const ready = isReady()
   const canAcceptMessage = queuedMessage === null
-  elements.micButton.disabled = !ready || busyWithoutCall
-  elements.landingMicButton.disabled = !ready || busyWithoutCall
+  elements.micButton.disabled = !voiceInputAvailable || !ready || busyWithoutCall
+  elements.landingMicButton.disabled = !voiceInputAvailable || !ready || busyWithoutCall
   for (const mic of [elements.micButton, elements.landingMicButton]) {
     mic.classList.toggle('mic-button--active', callActive)
-    mic.setAttribute('aria-label', callActive ? 'Stop voice' : 'Use voice')
+    mic.setAttribute('aria-label', callActive ? 'Stop voice' : voiceInputAvailable ? 'Use voice' : 'Voice requires a deployed preview')
     mic.setAttribute('aria-pressed', String(callActive))
-    mic.title = callActive ? 'Stop the voice call' : 'Talk instead of typing'
+    mic.title = callActive ? 'Stop the voice call' : voiceInputAvailable ? 'Talk instead of typing' : 'Streaming voice is available on deployed Workers'
   }
   elements.muteButton.hidden = !callActive
   elements.muteButton.disabled = !ready || !callActive
@@ -671,9 +721,58 @@ function renderCustomMessage(value: unknown): void {
     }
     return
   }
+  if (message.type === 'voice_products') {
+    const items = (Array.isArray(message.products) ? message.products : [])
+      .flatMap((entry): ProductCard[] => {
+        if (!entry || typeof entry !== 'object') return []
+        const record = entry as Record<string, unknown>
+        const range = record.priceRange && typeof record.priceRange === 'object'
+          ? record.priceRange as Record<string, unknown>
+          : null
+        const min = range?.min && typeof range.min === 'object' ? range.min as Record<string, unknown> : null
+        const max = range?.max && typeof range.max === 'object' ? range.max as Record<string, unknown> : null
+        if (typeof record.handle !== 'string' || typeof record.title !== 'string'
+          || typeof record.availableForSale !== 'boolean' || typeof min?.amount !== 'string'
+          || typeof min.currencyCode !== 'string' || typeof max?.amount !== 'string') return []
+        const safeUrl = safeArticleUrl(record.url)
+        const rawImage = record.image && typeof record.image === 'object' ? record.image as Record<string, unknown> : null
+        const imageUrl = safeArticleUrl(rawImage?.url)
+        const money = new Intl.NumberFormat('en-IN', {
+          style: 'currency',
+          currency: min.currencyCode,
+          maximumFractionDigits: 2,
+        })
+        const low = Number(min.amount)
+        const high = Number(max.amount)
+        const price = Number.isFinite(low) && Number.isFinite(high)
+          ? low === high ? money.format(low) : `${money.format(low)}–${money.format(high)}`
+          : `${min.currencyCode} ${min.amount}`
+        return [{
+          handle: record.handle,
+          title: record.title,
+          availableForSale: record.availableForSale,
+          price,
+          url: safeUrl,
+          image: imageUrl ? {
+            url: imageUrl,
+            altText: typeof rawImage?.altText === 'string' ? rawImage.altText : '',
+          } : null,
+        }]
+      })
+      .slice(0, 5)
+    if (items.length > 0) {
+      const anchor = afterReplyAnchor()
+      const existing = products.find((entry) => entry.anchor === anchor)
+      if (existing) existing.items = items
+      else products.push({ anchor, items })
+      renderThread()
+    }
+    return
+  }
   if (message.type === 'demo_session_cleared') {
     ticketAnchor = null
     sources = []
+    products = []
     elements.handoffCard.hidden = true
     hideSignInCard()
     renderThread()
@@ -791,6 +890,7 @@ elements.clearButton.addEventListener('click', () => {
   latestMessages = []
   notes = []
   sources = []
+  products = []
   ticketAnchor = null
   elements.handoffCard.hidden = true
   hideSignInCard()
