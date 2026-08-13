@@ -102,6 +102,21 @@ export function voiceDemoPageResponse(
                   <span class="support-task-title">Track an order</span>
                   <span class="support-task-copy">${orderTaskCopy}</span>
                 </button>`
+  const accountMarkup = identity.customerName
+    ? `<details class="account-menu">
+                <summary aria-label="Account options for ${escapeAttribute(identity.customerName)}">
+                  <span class="account-avatar" aria-hidden="true">${escapeText(monogram(identity.customerName).slice(0, 1))}</span>
+                  <span class="account-name">${escapeText(identity.customerName)}</span>
+                  <span class="account-chevron" aria-hidden="true">⌄</span>
+                </summary>
+                <div class="account-popover">
+                  <p><strong>${escapeText(identity.customerName)}</strong><span>Store account</span></p>
+                  <a href="/auth/shopify/logout">Sign out</a>
+                </div>
+              </details>`
+    : identity.configured
+      ? '<a class="account-signin" href="/auth/shopify/start">Sign in for order help</a>'
+      : ''
   const topicMarkup = topics.length > 0
     ? topics.slice(0, 9).map((topic) => `<section class="topic-card">
               <h3><a href="/kb?section=${encodeURIComponent(topic.slug)}">${escapeText(topic.name)}</a></h3>
@@ -126,7 +141,7 @@ export function voiceDemoPageResponse(
   </head>
   <body>
     <a class="skip-link" href="#thread">Skip to support</a>
-    <div id="support-app" class="app" data-view="landing">
+    <div id="support-app" class="app" data-view="landing" data-connection="connecting">
       <header class="chat-header">
         <div class="chat-header-inner">
           <a class="brand" href="${escapeAttribute(branding.homeUrl ?? '/')}" aria-label="${escapeAttribute(`${branding.displayName} home`)}">
@@ -138,17 +153,13 @@ export function voiceDemoPageResponse(
           </a>
           <div class="header-actions">
             <nav class="support-nav" aria-label="Support options">
-              <a href="/kb">Browse help</a>${identity.customerName
-                ? `\n              <span class="signed-in-as">${escapeText(identity.customerName)}</span>\n              <a href="/auth/shopify/logout">Sign out</a>`
-                : identity.configured
-                  ? '\n              <a href="/auth/shopify/start">Sign in for order help</a>'
-                  : ''}
+              <a class="help-centre-link" href="/kb">Help centre</a>
+              ${accountMarkup}
             </nav>
-            <button id="clear-button" class="text-button" type="button" hidden disabled>Start over</button>
           </div>
         </div>
       </header>
-      <div id="reconnect-banner" class="reconnect-banner" role="status" hidden>Reconnecting…</div>
+      <div id="reconnect-banner" class="reconnect-banner" role="status" hidden>Reconnecting… Your message will send when Ava is back.</div>
       <div id="session-turnstile" class="session-turnstile" data-sitekey="${escapeAttribute(turnstileSiteKey)}"></div>
 
       <main id="thread" class="thread" tabindex="-1">
@@ -172,7 +183,10 @@ export function voiceDemoPageResponse(
                 : identity.configured
                   ? 'Start anonymously — answers need no account. Sign in with your store account for order help or tickets.'
                   : 'Start anonymously. Ava answers from the help centre; use the support form for follow-up.'}</p>
-              <p id="landing-status" class="landing-status" role="status" aria-live="polite">Preparing secure chat…</p>
+              <p id="landing-status" class="landing-status" role="status" aria-live="polite">
+                <span class="connection-dot" aria-hidden="true"></span>
+                <span id="landing-status-copy">Ava is getting ready — you can ask now.</span>
+              </p>
             </section>
 
             <section class="support-tasks" aria-labelledby="support-tasks-title">
@@ -190,9 +204,9 @@ export function voiceDemoPageResponse(
                   <span class="support-task-title">Warranty or repair</span>
                   <span class="support-task-copy">Tell Ava what needs repair or what you want to claim.</span>
                 </button>
-                <button class="support-task" type="button" data-support-message="I need help with my invoice." disabled>
-                  <span class="support-task-title">Billing or invoice</span>
-                  <span class="support-task-copy">Ask Ava about an invoice, a charge, or your billing details.</span>
+                <button class="support-task support-task--featured" type="button" data-support-message="Help me choose the right product for my needs." disabled>
+                  <span class="support-task-title">Find the right product</span>
+                  <span class="support-task-copy">Tell Ava what you make, how often, and your budget. She’ll help narrow the options.</span>
                 </button>
                 <button id="human-help-button" class="support-task support-task--contact" type="button" disabled>
                   <span class="support-task-title">Contact support</span>
@@ -216,6 +230,20 @@ export function voiceDemoPageResponse(
             </section>
 
           </div>
+
+          <section class="conversation-toolbar" aria-label="Conversation controls">
+            <div class="conversation-agent">
+              ${avatar}
+              <span><strong>Ava</strong><small>Sales &amp; support assistant</small></span>
+            </div>
+            <div class="conversation-actions">
+              <button id="conversation-human-button" class="conversation-help-button" type="button">Contact support</button>
+              <button id="clear-button" class="new-conversation-button" type="button" hidden disabled>
+                <span aria-hidden="true">＋</span>
+                New conversation
+              </button>
+            </div>
+          </section>
 
           <ol id="transcript" class="thread-list" role="log" aria-label="Conversation with Ava" aria-live="polite" hidden>
             <li class="bubble-row bubble-row--assistant" id="signin-flow" hidden>
@@ -252,11 +280,10 @@ export function voiceDemoPageResponse(
             <button id="mic-button" class="mic-button" type="button" aria-label="Use voice" title="Talk instead of typing" disabled>
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path></svg>
             </button>
-            <button id="conversation-human-button" class="human-action-button" type="button" aria-label="Open a support request" title="Open a support request" disabled>
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"></path><path d="M8 10h.01"></path><path d="M12 10h.01"></path><path d="M16 10h.01"></path></svg>
-            </button>
             <button id="mute-button" class="mute-button" type="button" hidden disabled>Mute</button>
-            <button type="submit" class="send-button" disabled>Send</button>
+            <button type="submit" class="send-button" aria-label="Send" disabled>
+              <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></svg>
+            </button>
           </form>
         </div>
       </footer>

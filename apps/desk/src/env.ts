@@ -36,8 +36,16 @@ export type Env = Cloudflare.Env & {
   SHOPIFY_CLIENT_SECRET?: string
   /** Legacy custom-app Admin token; still honored as an alternative to the client credentials grant. */
   SHOPIFY_ADMIN_TOKEN?: string
+  /** Optional public Storefront API token for product discovery; public product search can also run tokenless. */
+  SHOPIFY_STOREFRONT_ACCESS_TOKEN?: string
+  /** Optional ISO 3166-1 alpha-2 country used for localized Storefront prices and availability. */
+  SHOPIFY_STOREFRONT_COUNTRY?: string
+  /** Optional Shopify language code used for localized Storefront content. */
+  SHOPIFY_STOREFRONT_LANGUAGE?: string
   /** Customer Account API public client ID enabling optional customer sign-in on the support portal. */
   SHOPIFY_CUSTOMER_CLIENT_ID?: string
+  /** Optional comma-separated product and brand vocabulary boosted by streaming speech recognition. */
+  ABLE_VOICE_KEYTERMS?: string
   /** Meta callback token used only for the WhatsApp webhook GET challenge. */
   WHATSAPP_VERIFY_TOKEN?: string
   /** Meta app secret used to verify X-Hub-Signature-256 on webhook POSTs. */

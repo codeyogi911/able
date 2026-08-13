@@ -14,6 +14,58 @@ Able's public repository is the canonical source for product work. A private hos
 
 An urgent hosted fix may be developed against the affected public commit, but it must still be generalized and merged upstream before it becomes the maintained solution. Do not let a proving environment accumulate a long-lived source fork.
 
+## Production-like local assistant
+
+Use the dedicated local workflow when testing the customer-facing assistant:
+
+```sh
+npm install
+npx wrangler login
+npm run dev:parity
+```
+
+Open `http://127.0.0.1:8787/`. The command builds the same browser assets and
+Worker entry point used for deployment, applies every D1 migration, and adds
+only reserved `example.test` workspace readiness data plus a neutral knowledge
+fixture. Its state persists under the ignored
+`apps/desk/.wrangler/local-parity` directory, so agent conversations and local
+requests behave consistently across restarts. No production database export,
+customer record, attachment, resource ID, or secret is required.
+
+The command intentionally uses a hybrid Cloudflare development topology:
+
+- Workers AI is remote and consumes the authenticated account's inference
+  quota. It is the real model path used by the deployed Worker.
+- D1, R2, queues, Durable Objects, Email Service, rate limits, and fixtures are
+  local simulations. Email acceptance and edge security controls therefore
+  need separate staging smoke tests.
+- Durable Object state is newly local; it cannot mirror a deployed object's
+  identity, location, connection state, or warm/cold timing. Do not copy its
+  production storage into the local workspace.
+- Turnstile and Cloudflare Access are bypassed only for the localhost surface.
+  Test their real policies on an isolated staging hostname.
+- Local data is neutral. Production knowledge articles, storefront content,
+  and customer history are absent by design, so answers grounded in those
+  sources differ until equivalent non-customer fixtures or a staging provider
+  are configured.
+
+For Shopify product-discovery parity, copy
+`apps/desk/.dev.vars.parity.example` to the ignored `apps/desk/.dev.vars` and
+set `SHOPIFY_SHOP_DOMAIN` to a dedicated development store. Add
+`SHOPIFY_STOREFRONT_ACCESS_TOKEN` when that shop does not allow tokenless
+Storefront API access. For order and customer-account testing, also supply the
+corresponding least-authority development app values shown in the template.
+Never reuse production credentials. Product answers then use the development
+store's live published catalog; they will not match production unless the
+staging catalog intentionally contains equivalent neutral products. Do not
+copy `.dev.vars.example` for this workflow: that file documents deployment
+setup and its placeholders intentionally fail closed.
+
+Use plain `npm run dev` when you want to preserve and manage the default local
+Wrangler state yourself. Unlike `dev:parity`, it does not seed the support
+sender and accepted email-test values required for the assistant homepage, so
+a fresh database may correctly fall back to the conventional portal.
+
 ## Repository boundaries
 
 - `apps/desk` is the first deployable product workspace.

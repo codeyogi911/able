@@ -16,6 +16,7 @@
     "build": "npm run build:assets",
     "build:assets": "npm run build:assets --workspace @able/desk",
     "dev": "npm run dev --workspace @able/desk",
+    "dev:parity": "npm run dev:parity --workspace @able/desk",
     "deploy": "npm run deploy --workspace @able/desk",
     "deploy:production": "npm run deploy:production --workspace @able/desk",
     "build:production-config": "npm run build:production-config --workspace @able/desk",

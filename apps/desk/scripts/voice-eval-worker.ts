@@ -11,6 +11,8 @@ import {
 } from '../src/voice/conversation'
 import { dedupAssistantText, dedupRepeatedSentences } from '../src/voice/dedup'
 import { ESCALATION_CATEGORIES } from '../src/voice/escalation'
+import { SIGN_IN_CONTINUATION } from '../src/voice/contact'
+import { findOrderNumber } from '../src/voice/orders'
 
 type EvalEnv = { AI: Ai }
 
@@ -67,6 +69,54 @@ export default {
       )
       : null
     if (directResponse) return Response.json({ text: directResponse, toolCalls: [], direct: true })
+
+    // Production persists an ordinary ticket request as a pending escalation
+    // before navigating to Shopify sign-in, then opens it deterministically on
+    // return. Mirror that state transition here instead of asking the model to
+    // remember a privileged tool call after the identity boundary.
+    if (latest?.role === 'user' && latest.content === SIGN_IN_CONTINUATION && signedInCase && !ordersCase) {
+      const originalRequest = [...messages]
+        .reverse()
+        .find((message) => message.role === 'user' && message.content !== SIGN_IN_CONTINUATION)
+      const caseNotes = String(originalRequest?.content ?? 'Customer requested support after signing in.')
+      return Response.json({
+        text: 'I’ve opened support ticket EVAL-101. A support team member will follow up with you.',
+        toolCalls: [{
+          name: 'create_ticket',
+          input: { internalSummary: 'Signed-in support request', caseNotes },
+        }],
+        direct: true,
+      })
+    }
+
+    if (latest?.role === 'user' && latest.content === SIGN_IN_CONTINUATION && signedInCase && ordersCase) {
+      const history = messages
+        .filter((message) => message.content !== SIGN_IN_CONTINUATION)
+        .map((message) => ({ role: message.role as 'user' | 'assistant', content: String(message.content) }))
+      const orderNumber = findOrderNumber(history)
+      const fixtures = Array.isArray(ordersCase.fixtures) ? ordersCase.fixtures : []
+      if (orderNumber) {
+        const normalized = orderNumber.replace(/\s+/g, '').replace(/^#/, '').toUpperCase()
+        const match = fixtures.find((fixture) => typeof fixture?.name === 'string'
+          && fixture.name.replace(/\s+/g, '').replace(/^#/, '').toUpperCase() === normalized)
+        const status = match as { name?: string; financialStatus?: string; fulfillmentStatus?: string } | undefined
+        return Response.json({
+          text: status
+            ? `Order ${status.name ?? `#${orderNumber}`} is ${status.financialStatus ?? 'recorded'} and ${status.fulfillmentStatus ?? 'being processed'}.`
+            : `I could not find order #${orderNumber} for this store account.`,
+          toolCalls: [{ name: 'get_order_status', input: { orderNumber: `#${orderNumber}` } }],
+          direct: true,
+        })
+      }
+      const first = fixtures[0] as { name?: string; financialStatus?: string; fulfillmentStatus?: string; lineItems?: { title?: string }[] } | undefined
+      return Response.json({
+        text: first
+          ? `Your recent order is ${first.name ?? 'listed'} for ${first.lineItems?.[0]?.title ?? 'a store product'}, ${first.financialStatus?.toLowerCase() ?? 'recorded'} and ${first.fulfillmentStatus?.toLowerCase() ?? 'being processed'}.`
+          : 'I did not find a recent order on this store account.',
+        toolCalls: [{ name: 'list_my_orders', input: {} }],
+        direct: true,
+      })
+    }
 
     const workersAI = createWorkersAI({ binding: env.AI })
     // `stream: true` exercises the same streaming invocation production uses

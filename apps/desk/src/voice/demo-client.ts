@@ -1,5 +1,6 @@
 import { VoiceClient, type TranscriptMessage, type VoiceStatus } from '@cloudflare/voice/client'
 import './demo.css'
+import { renderStreamingMarkdown } from '../ui/markdown-client'
 import { SIGN_IN_CONTINUATION } from './contact'
 import { HUMAN_HELP_MESSAGE } from './escalation'
 
@@ -20,7 +21,7 @@ const elements = {
   landingMicButton: required<HTMLButtonElement>('#landing-mic-button'),
   humanHelpButton: required<HTMLButtonElement>('#human-help-button'),
   conversationHumanButton: required<HTMLButtonElement>('#conversation-human-button'),
-  landingStatus: required<HTMLElement>('#landing-status'),
+  landingStatusCopy: required<HTMLElement>('#landing-status-copy'),
   composerBar: required<HTMLElement>('#composer-bar'),
   signinFlow: required<HTMLLIElement>('#signin-flow'),
   signinLead: required<HTMLElement>('#signin-card-lead'),
@@ -93,7 +94,14 @@ let ticketAnchor: number | null = null
 let signinAnchor: number | null = null
 let interimText = ''
 let typing = false
+let queuedMessage: string | null = null
+let queuedMessageSent = false
+let awaitingReply = false
+let replyFailed = false
 let resetReload: ReturnType<typeof setTimeout> | null = null
+let connectionDelayTimer: ReturnType<typeof setTimeout> | null = null
+let replyDelayTimer: ReturnType<typeof setTimeout> | null = null
+let replyTimeoutTimer: ReturnType<typeof setTimeout> | null = null
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 const viewportListenerAbort = new AbortController()
@@ -121,6 +129,53 @@ syncSupportViewport()
 
 function isReady(): boolean {
   return connected && sessionReady
+}
+
+type ConnectionStage = 'connecting' | 'verifying' | 'ready' | 'reconnecting' | 'error'
+
+function setConnectionStage(stage: ConnectionStage, copy: string): void {
+  elements.app.dataset.connection = stage
+  elements.landingStatusCopy.textContent = copy
+}
+
+function clearConnectionDelay(): void {
+  if (connectionDelayTimer === null) return
+  clearTimeout(connectionDelayTimer)
+  connectionDelayTimer = null
+}
+
+function scheduleConnectionDelay(): void {
+  clearConnectionDelay()
+  connectionDelayTimer = setTimeout(() => {
+    connectionDelayTimer = null
+    if (isReady()) return
+    setConnectionStage(
+      hasConnected ? 'verifying' : 'connecting',
+      'Still connecting — you can ask now. Your question will send automatically.',
+    )
+  }, 1_200)
+}
+
+function clearReplyWait(): void {
+  awaitingReply = false
+  if (replyDelayTimer !== null) clearTimeout(replyDelayTimer)
+  if (replyTimeoutTimer !== null) clearTimeout(replyTimeoutTimer)
+  replyDelayTimer = null
+  replyTimeoutTimer = null
+}
+
+function beginReplyWait(): void {
+  clearReplyWait()
+  replyFailed = false
+  awaitingReply = true
+  replyDelayTimer = setTimeout(() => {
+    replyDelayTimer = null
+    if (awaitingReply) pushNote('Ava is checking this now — some answers take a little longer.')
+  }, 6_000)
+  replyTimeoutTimer = setTimeout(() => {
+    replyTimeoutTimer = null
+    if (awaitingReply) pushNote('This is taking longer than usual. You can try again or contact support.')
+  }, 18_000)
 }
 
 function reloadFreshSession(): void {
@@ -168,14 +223,14 @@ function messageRow(message: TranscriptMessage): HTMLLIElement {
   row.className = `answer-turn answer-turn--${assistant ? 'assistant' : 'user'}`
   const label = document.createElement('p')
   label.className = 'turn-label'
-  label.textContent = assistant ? 'Answer' : 'You asked'
+  label.textContent = assistant ? 'Ava' : 'You'
   const copy = document.createElement('div')
   copy.className = 'turn-copy'
-  const text = document.createElement(assistant ? 'p' : 'h2')
-  text.textContent = message.text
+  const text = document.createElement(assistant ? 'div' : 'h2')
+  if (assistant) renderStreamingMarkdown(text, message.text)
+  else text.textContent = message.text
   copy.append(srLabel(assistant ? 'Ava: ' : 'You: '), text)
-  if (assistant) row.append(label)
-  row.append(copy)
+  row.append(label, copy)
   return row
 }
 
@@ -194,12 +249,27 @@ function pendingRow(text: string): HTMLLIElement {
   return row
 }
 
-function typingRow(): HTMLLIElement {
+function queuedMessageRow(text: string): HTMLLIElement {
+  const row = document.createElement('li')
+  row.className = 'answer-turn answer-turn--user answer-turn--pending'
+  const label = document.createElement('p')
+  label.className = 'turn-label'
+  label.textContent = 'You'
+  const content = document.createElement('div')
+  content.className = 'turn-copy'
+  const copy = document.createElement('h2')
+  copy.textContent = text
+  content.append(srLabel('You: '), copy)
+  row.append(label, content)
+  return row
+}
+
+function typingRow(activity = 'Ava is working on this…'): HTMLLIElement {
   const row = document.createElement('li')
   row.className = 'answer-turn answer-turn--assistant'
   const label = document.createElement('p')
   label.className = 'turn-label'
-  label.textContent = 'Answer'
+  label.textContent = 'Ava'
   const bubble = document.createElement('div')
   bubble.className = 'turn-copy typing-bubble'
   const dots = document.createElement('span')
@@ -210,7 +280,11 @@ function typingRow(): HTMLLIElement {
   still.className = 'typing-static'
   still.setAttribute('aria-hidden', 'true')
   still.textContent = '…'
-  bubble.append(dots, still, srLabel('Ava is typing'))
+  const activityCopy = document.createElement('span')
+  activityCopy.className = 'typing-copy'
+  activityCopy.setAttribute('aria-hidden', 'true')
+  activityCopy.textContent = activity
+  bubble.append(dots, still, activityCopy, srLabel(activity))
   row.append(label, bubble)
   return row
 }
@@ -333,7 +407,11 @@ function renderThread(): void {
   }
   pushExtras(length)
   if (interimText) rows.push(pendingRow(interimText))
-  if (typing) rows.push(typingRow())
+  if (queuedMessage !== null && !latestMessages.some((message) => message.role === 'user' && message.text === queuedMessage)) {
+    rows.push(queuedMessageRow(queuedMessage))
+  }
+  if (queuedMessage !== null && !queuedMessageSent) rows.push(typingRow('Connecting securely…'))
+  else if (typing) rows.push(typingRow())
   elements.transcript.replaceChildren(...rows)
   if (stick) scrollToBottom()
 }
@@ -361,6 +439,7 @@ function updateControls(status: VoiceStatus): void {
   }
   const busyWithoutCall = !callActive && status !== 'idle'
   const ready = isReady()
+  const canAcceptMessage = queuedMessage === null
   elements.micButton.disabled = !ready || busyWithoutCall
   elements.landingMicButton.disabled = !ready || busyWithoutCall
   for (const mic of [elements.micButton, elements.landingMicButton]) {
@@ -371,16 +450,16 @@ function updateControls(status: VoiceStatus): void {
   }
   elements.muteButton.hidden = !callActive
   elements.muteButton.disabled = !ready || !callActive
-  elements.clearButton.disabled = !connected
-  elements.app.setAttribute('aria-busy', String(!ready))
+  elements.clearButton.disabled = false
+  elements.app.setAttribute('aria-busy', String(awaitingReply || status === 'thinking'))
   elements.landingInput.disabled = false
-  elements.landingSubmit.disabled = !ready
-  for (const task of supportTaskButtons) task.disabled = !ready
-  elements.humanHelpButton.disabled = !ready
+  elements.landingSubmit.disabled = !canAcceptMessage
+  for (const task of supportTaskButtons) task.disabled = !canAcceptMessage
+  elements.humanHelpButton.disabled = false
   elements.textInput.disabled = false
-  elements.textSubmit.disabled = !ready
-  elements.conversationHumanButton.disabled = !ready
-  const nowTyping = status === 'thinking'
+  elements.textSubmit.disabled = !canAcceptMessage
+  elements.conversationHumanButton.disabled = !canAcceptMessage
+  const nowTyping = !replyFailed && (status === 'thinking' || awaitingReply)
   if (nowTyping !== typing) {
     typing = nowTyping
     renderThread()
@@ -506,6 +585,15 @@ const SESSION_ERROR_COPY: Record<string, string> = {
   turnstile_not_configured: 'This chat is not fully set up yet. Please try again later.',
 }
 
+function flushQueuedMessage(): void {
+  if (!isReady() || queuedMessage === null || queuedMessageSent) return
+  queuedMessageSent = true
+  beginReplyWait()
+  client.sendText(queuedMessage)
+  renderThread()
+  updateControls(client.status)
+}
+
 function renderTicket(value: unknown): void {
   if (!value || typeof value !== 'object') return
   const ticket = value as { reference?: unknown; label?: unknown; status?: unknown }
@@ -524,9 +612,11 @@ function renderCustomMessage(value: unknown): void {
   const message = value as Record<string, unknown>
   if (message.type === 'voice_session_ready') {
     sessionReady = true
+    clearConnectionDelay()
+    setConnectionStage('ready', queuedMessage === null ? 'Ava is ready.' : 'Ava is ready — sending your question…')
     elements.sessionTurnstile.hidden = true
-    elements.landingStatus.textContent = ''
     updateControls(client.status)
+    flushQueuedMessage()
     if (signInContinuationPending) {
       // Back from the hosted store login: resume the interrupted flow. This is
       // a machine-readable continuation, not customer copy.
@@ -541,9 +631,10 @@ function renderCustomMessage(value: unknown): void {
   }
   if (message.type === 'voice_session_error' || message.type === 'voice_session_required') {
     sessionReady = false
+    clearConnectionDelay()
     const reason = typeof message.reason === 'string' ? message.reason : ''
     const copy = SESSION_ERROR_COPY[reason] ?? 'The anti-spam check could not be completed. Reload the page to try again.'
-    elements.landingStatus.textContent = copy
+    setConnectionStage('error', copy)
     if (elements.app.dataset.view === 'conversation') pushNote(copy)
     updateControls(client.status)
     return
@@ -605,18 +696,43 @@ client.addEventListener('connectionchange', (isConnected) => {
     // starts unproven, so run the invisible session check again.
     sessionReady = false
     elements.sessionTurnstile.hidden = false
+    setConnectionStage('verifying', 'Secure connection found — finishing setup…')
+    scheduleConnectionDelay()
     beginSessionProof()
   } else {
     callActive = false
     sessionReady = false
-    if (hasConnected) elements.reconnectBanner.hidden = false
+    if (hasConnected) {
+      elements.reconnectBanner.hidden = false
+      setConnectionStage('reconnecting', 'Connection interrupted. Your question will send when Ava is back.')
+    } else {
+      setConnectionStage('connecting', 'Ava is getting ready — you can ask now.')
+    }
+    scheduleConnectionDelay()
   }
   updateControls(client.status)
 })
 client.addEventListener('statuschange', updateControls)
 client.addEventListener('transcriptchange', (messages) => {
+  const receivedReply = messages.some((message, index) => (
+    message.role === 'assistant'
+    && latestMessages[index]?.text !== message.text
+  ))
+  const receivedCustomerTurn = messages.some((message, index) => (
+    message.role === 'user'
+    && latestMessages[index]?.text !== message.text
+  ))
   latestMessages = messages
+  if (receivedCustomerTurn) replyFailed = false
+  if (queuedMessageSent && queuedMessage !== null && messages.some((message) => (
+    message.role === 'user' && message.text === queuedMessage
+  ))) {
+    queuedMessage = null
+    queuedMessageSent = false
+  }
+  if (receivedReply) clearReplyWait()
   if (messages.length > 0) setConversationMode(true)
+  updateControls(client.status)
   renderThread()
 })
 client.addEventListener('interimtranscript', (text) => {
@@ -629,8 +745,17 @@ client.addEventListener('mutechange', (muted) => {
 client.addEventListener('custommessage', renderCustomMessage)
 client.addEventListener('error', (error) => {
   if (!error) return
-  if (elements.app.dataset.view === 'landing') elements.landingStatus.textContent = error
-  else pushNote(error)
+  clearReplyWait()
+  replyFailed = true
+  if (queuedMessageSent) {
+    queuedMessage = null
+    queuedMessageSent = false
+  }
+  const copy = 'Ava couldn’t finish that answer. Please try again, or contact support if it keeps happening.'
+  if (elements.app.dataset.view === 'landing') setConnectionStage('error', copy)
+  else pushNote(copy)
+  updateControls(client.status)
+  renderThread()
 })
 
 async function toggleVoice(): Promise<void> {
@@ -657,6 +782,9 @@ elements.signinButton.addEventListener('click', beginStoreSignIn)
 elements.clearButton.addEventListener('click', () => {
   if (callActive) client.endCall()
   callActive = false
+  clearReplyWait()
+  queuedMessage = null
+  queuedMessageSent = false
   elements.clearButton.disabled = true
   client.sendJSON({ type: 'clear_demo_session' })
   resetReload = setTimeout(reloadFreshSession, 2_000)
@@ -677,16 +805,27 @@ elements.clearButton.addEventListener('click', () => {
 })
 
 function sendMessage(message: string): boolean {
-  if (!message || !isReady()) return false
+  if (!message || queuedMessage !== null) return false
   setConversationMode(true)
-  client.sendText(message)
+  if (isReady()) {
+    beginReplyWait()
+    client.sendText(message)
+  } else {
+    queuedMessage = message
+    queuedMessageSent = false
+    setConnectionStage(
+      connected ? 'verifying' : hasConnected ? 'reconnecting' : 'connecting',
+      'Your question is saved and will send as soon as Ava is ready.',
+    )
+  }
+  updateControls(client.status)
+  renderThread()
   return true
 }
 
 function focusSupportRequest(): void {
-  if (!isReady()) return
   elements.landingInput.placeholder = 'Briefly describe what you need help with'
-  elements.landingStatus.textContent = 'Describe the issue first. Ava will ask you to sign in only if a private request is needed.'
+  elements.landingStatusCopy.textContent = 'Describe the issue first. Ava will ask you to sign in only if a private request is needed.'
   elements.landingInput.focus()
 }
 
@@ -704,10 +843,6 @@ elements.landingForm.addEventListener('submit', (event) => {
   event.preventDefault()
   const message = elements.landingInput.value.trim()
   if (!message) return
-  if (!isReady()) {
-    elements.landingStatus.textContent = 'Preparing secure chat…'
-    return
-  }
   elements.landingInput.blur()
   if (sendMessage(message)) elements.landingInput.value = ''
 })
@@ -742,4 +877,6 @@ window.addEventListener('beforeunload', () => {
 
 updateControls(client.status)
 setConversationMode(false)
+setConnectionStage('connecting', 'Ava is getting ready — you can ask now.')
+scheduleConnectionDelay()
 client.connect()

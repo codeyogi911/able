@@ -48,6 +48,18 @@
       },
       "SHOPIFY_CUSTOMER_CLIENT_ID": {
         "description": "Optional Customer Account API public client ID enabling store-account sign-in on the support portal."
+      },
+      "SHOPIFY_STOREFRONT_ACCESS_TOKEN": {
+        "description": "Optional public Shopify Storefront API token for published product search; product discovery also supports Shopify's tokenless access."
+      },
+      "SHOPIFY_STOREFRONT_COUNTRY": {
+        "description": "Optional ISO country code used to localize public Shopify prices and availability, such as IN."
+      },
+      "SHOPIFY_STOREFRONT_LANGUAGE": {
+        "description": "Optional Shopify language code used to localize public storefront content, such as EN or HI."
+      },
+      "ABLE_VOICE_KEYTERMS": {
+        "description": "Optional comma-separated product, brand, and place vocabulary boosted by voice recognition."
       }
     }
   },
@@ -57,6 +69,7 @@
     "build:portal-search": "node scripts/build-portal-search.mjs",
     "build:assets": "npm run build:mcp-app && npm run build:voice-demo && npm run build:portal-search",
     "dev": "npm run build:assets && wrangler dev",
+    "dev:parity": "npm run build:assets && node scripts/local-parity-server.mjs",
     "deploy": "npm run build:assets && wrangler deploy",
     "build:production-config": "node scripts/production-config.mjs",
     "deploy:production": "node scripts/require-main-build.mjs && npm run build:production-config && wrangler d1 migrations apply DB --remote --config wrangler.production.generated.json && npm run build:assets && wrangler deploy --config wrangler.production.generated.json",
@@ -82,9 +95,10 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "agents": "0.20.1",
     "ai": "7.0.37",
-    "hono": "^4.12.32",
+    "hono": "^4.13.1",
     "marked": "^18.0.7",
     "postal-mime": "^2.7.5",
+    "remend": "^1.3.0",
     "workers-ai-provider": "4.0.0",
     "xss": "^1.0.15",
     "zod": "^4.4.3"

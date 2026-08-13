@@ -16,5 +16,5 @@
     "noEmit": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "worker-configuration.d.ts"],
-  "exclude": ["src/adapters/mcp/app/**/*.ts", "src/voice/demo-client.ts", "src/portal/search-client.ts"]
+  "exclude": ["src/adapters/mcp/app/**/*.ts", "src/voice/demo-client.ts", "src/ui/markdown-client.ts", "src/portal/search-client.ts"]
 }

@@ -28,7 +28,12 @@ import {
 } from './escalation'
 import { claimVoiceTicketCapacity, openVoiceSupportCase } from './support'
 import {
+  budgetBundleReply,
   directVoiceResponse,
+  inrBudgetFromTranscript,
+  isStorefrontShoppingRequest,
+  productComparisonReply,
+  productComparisonTerms,
   prepareVoiceModelMessages,
   UNDOCUMENTED_PRODUCT_FORM_REPLY,
   UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY,
@@ -38,6 +43,11 @@ import {
 } from './conversation'
 import { shopifyConfigured } from '../integrations/shopify'
 import {
+  getStorefrontProduct,
+  searchStorefrontProducts,
+  shopifyStorefrontConfigured,
+} from '../integrations/shopify-storefront'
+import {
   bareOrderNumber,
   findOrderNumber,
   isOrderLookupRequest,
@@ -45,7 +55,7 @@ import {
   orderStatusForSession,
   orderStatusReply,
 } from './orders'
-import { dedupAssistantText } from './dedup'
+import { dedupAssistantText, recoverAssistantText } from './dedup'
 import {
   SHOPIFY_CUSTOMER_SESSION_COOKIE,
   shopifyCustomerConfigured,
@@ -122,10 +132,21 @@ function cleanError(): string {
   return 'Voice support could not complete that action. Please use the support request form.'
 }
 
+const DEFAULT_VOICE_KEYTERMS = ['printer', 'router', 'paper tray']
+
+export function voiceKeyterms(configured: string | undefined): string[] {
+  const terms = (configured ?? '')
+    .split(',')
+    .map((term) => term.replace(/\s+/g, ' ').trim())
+    .filter((term) => term.length >= 2 && term.length <= 60)
+  const unique = [...new Set(terms)].slice(0, 30)
+  return unique.length > 0 ? unique : DEFAULT_VOICE_KEYTERMS
+}
+
 export class AbleDeskAgent extends VoiceAgent<Env> {
   transcriber = new WorkersAIFluxSTT(this.env.AI, {
     eotThreshold: 0.7,
-    keyterms: ['printer', 'router', 'paper tray'],
+    keyterms: voiceKeyterms(this.env.ABLE_VOICE_KEYTERMS),
   })
 
   tts = new WorkersAITTS(this.env.AI, { speaker: 'asteria' })
@@ -240,9 +261,9 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     const messages = context.messages.map(({ role, content }) => ({ role, content }))
 
     // The client sends this as its first turn after returning from the hosted
-    // store login; escalations and order flows complete deterministically,
-    // while a pending ticket request falls through to the model, which holds
-    // the original request in history and the create_ticket tool.
+    // store login. Escalations, ordinary ticket requests, and order flows all
+    // complete deterministically; verified actions must never depend on the
+    // model remembering to call the corresponding tool after navigation.
     if (transcript.trim() === SIGN_IN_CONTINUATION) {
       const continuationReply = await this.#completeSignInContinuation(context.connection, shopifyCustomer, contact)
       if (continuationReply !== null) return continuationReply
@@ -282,6 +303,7 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     }
 
     const ordersAvailable = shopifyConfigured(this.env)
+    const productsAvailable = shopifyStorefrontConfigured(this.env)
     if (!contact && ordersAvailable && signInAvailable && isOrderLookupRequest(transcript)) {
       await this.#patchSession({ pendingSignInReason: 'order_lookup' })
       this.#requestSignIn(context.connection, 'order_lookup')
@@ -309,6 +331,40 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     const directResponse = directVoiceResponse(transcript, messages)
     if (directResponse) return directResponse
 
+    const maximumINR = inrBudgetFromTranscript(transcript)
+    const requiresBundle = /\bmachine\b/i.test(transcript) && /\bgrinder\b/i.test(transcript)
+    if (productsAvailable && maximumINR !== null && requiresBundle) {
+      const productResult = await searchStorefrontProducts(this.env, 'machine grinder', {
+        shopperBudget: { amount: maximumINR, currencyCode: 'INR' },
+        requireBundle: true,
+      })
+      if (productResult.status === 'ok') {
+        const reply = budgetBundleReply(productResult.products, maximumINR)
+        if (reply) return reply
+      }
+      if (productResult.status === 'unavailable') {
+        return 'I cannot check the storefront right now. Please try again shortly.'
+      }
+      return `I did not find a verified machine-and-grinder bundle within ₹${maximumINR.toLocaleString('en-IN')}. Would you consider a hand grinder?`
+    }
+
+    const comparison = productsAvailable ? productComparisonTerms(transcript) : null
+    if (comparison) {
+      const [firstTerm, secondTerm] = comparison
+      const [firstResult, secondResult] = await Promise.all([
+        searchStorefrontProducts(this.env, firstTerm),
+        searchStorefrontProducts(this.env, secondTerm),
+      ])
+      if (firstResult.status === 'ok' && secondResult.status === 'ok') {
+        const reply = productComparisonReply(firstTerm, firstResult.products, secondTerm, secondResult.products)
+        if (reply) return reply
+      }
+      if (firstResult.status === 'unavailable' || secondResult.status === 'unavailable') {
+        return 'I cannot compare those products right now. Please try again shortly.'
+      }
+      return 'I could not verify both products in the storefront. Which one should I look up first?'
+    }
+
     const ordersEnabled = ordersAvailable && contact !== null
     let signInRequested = false
     const settings = await loadWorkspaceSettings(this.env.DB)
@@ -321,10 +377,18 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       }),
       system: voiceAgentSystemPrompt(workspaceShortName(settings.displayName), {
         orders: ordersAvailable,
+        products: productsAvailable,
         signedIn: shopifyCustomer !== null,
         signInAvailable,
+        locale: settings.locale,
+        timezone: settings.timezone,
       }),
       messages: prepareVoiceModelMessages(messages),
+      ...(productsAvailable && isStorefrontShoppingRequest(transcript) ? {
+        prepareStep: ({ stepNumber }: { stepNumber: number }) => stepNumber === 0
+            ? { toolChoice: { type: 'tool', toolName: 'search_storefront_products' } }
+            : { toolChoice: 'auto' as const },
+      } : {}),
       tools: {
         search_help_center: tool({
           description: 'Search the published help-centre articles for how-to steps, product care, policies, shipping, warranty, and troubleshooting. Returns article content to answer from; the matching articles are shown to the caller as links automatically.',
@@ -351,6 +415,48 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
             }
           },
         }),
+        ...(productsAvailable ? {
+          search_storefront_products: tool({
+            description: 'Search the public Shopify storefront for products a shopper can browse. Returns up to five relevant published products with descriptions, availability, price ranges, images, and product-page URLs. Use for product discovery, selection, comparison, pricing, or availability—not troubleshooting or policy answers. Never read or spell a URL aloud.',
+            inputSchema: z.object({
+              query: z.string().min(2).max(120).describe('A concise natural-language product search, including the customer need or product name.'),
+            }),
+            execute: async ({ query }) => {
+              const maximumINR = inrBudgetFromTranscript(transcript)
+              const requiresBundle = /\bmachine\b/i.test(transcript) && /\bgrinder\b/i.test(transcript)
+              const result = await searchStorefrontProducts(this.env, requiresBundle ? 'machine grinder' : query, {
+                ...(maximumINR === null ? {} : { shopperBudget: { amount: maximumINR, currencyCode: 'INR' } }),
+                ...(requiresBundle ? { requireBundle: true } : {}),
+              })
+              if (maximumINR === null || result.status !== 'ok') return result
+              const withinBudget = result.products.filter((product) => {
+                if (product.priceRange.max.currencyCode !== 'INR') return false
+                const maximum = Number(product.priceRange.max.amount)
+                return Number.isFinite(maximum) && maximum <= maximumINR
+              })
+              return {
+                ...result,
+                budgetEvidence: {
+                  maximumINR,
+                  withinBudgetHandles: withinBudget.map((product) => product.handle),
+                  bundleWithinBudgetHandles: withinBudget
+                    .filter((product) => product.productType?.toLowerCase() === 'bundle'
+                      || /\b(?:bundle|combo|with|kit)\b/i.test(product.title))
+                    .map((product) => product.handle),
+                  note: 'Budget fit applies to one returned product. Do not add separate product prices.',
+                },
+              }
+            },
+          }),
+          get_storefront_product: tool({
+            description: 'Fetch bounded public storefront detail for one product handle returned by search_storefront_products. Use when the caller selects a result or asks about its options, variants, price, availability, or description.',
+            inputSchema: z.object({
+              handle: z.string().min(1).max(200).regex(/^[a-zA-Z0-9][a-zA-Z0-9-]*$/)
+                .describe('The exact opaque product handle returned by search_storefront_products.'),
+            }),
+            execute: async ({ handle }) => getStorefrontProduct(this.env, handle),
+          }),
+        } : {}),
         ...(shopifyCustomer ? {
           list_my_orders: tool({
             description: "List the signed-in caller's most recent orders: names, dates, payment and fulfillment status, totals, and tracking. Use when they ask about an order without giving a number, then confirm which order they mean. Returns only the signed-in caller's own orders.",
@@ -414,7 +520,16 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
                   : reason === 'product_help' && ordersAvailable
                     ? 'order_lookup'
                     : 'open_ticket'
-                await this.#patchSession({ pendingSignInReason: continuationReason })
+                await this.#patchSession({
+                  pendingSignInReason: continuationReason,
+                  ...(continuationReason === 'open_ticket' ? {
+                    pendingEscalation: {
+                      category: classifyEscalation(transcript) ?? 'explicit_human_request',
+                      customerMessage: transcript,
+                      requestId: turnRequestId,
+                    },
+                  } : {}),
+                })
                 this.#requestSignIn(context.connection, continuationReason)
                 return reason === 'product_help'
                   ? { status: 'requested', responseRequirement: `Reply exactly: "${ordersAvailable ? UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY : UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY}"` }
@@ -433,7 +548,11 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     // At temperature 0 the model sometimes restates its pre-tool-call sentence
     // verbatim after the tool result; the wrapper drops exact repeats within
     // the turn before they reach TTS and the transcript.
-    const stream = dedupAssistantText(result.fullStream)
+    const stream = recoverAssistantText(
+      dedupAssistantText(result.fullStream),
+      'I couldn’t finish that answer just now. Please try again, or contact support if it keeps happening.',
+      () => console.warn(JSON.stringify({ event: 'voice_model_stream', outcome: 'provider_error' })),
+    )
     if (contact) return stream
 
     // Safety net for the anonymous branch: the model occasionally speaks the
@@ -530,8 +649,7 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       return ordersOverviewReply(overview.customer.orders)
     }
 
-    // A pending ticket request (or no pending flow at all) continues with the
-    // model: the original ask is in the conversation history.
+    // No pending verified action remains; ordinary conversation can continue.
     return null
   }
 
