@@ -145,6 +145,22 @@ describe('voice demo boundary', () => {
     expect(composer).toBeGreaterThan(signinFlow)
   })
 
+  it('invites India customers to use English or Hinglish', async () => {
+    const html = await voiceDemoPageResponse(
+      BRANDING,
+      'turnstile-site-key',
+      true,
+      [],
+      { configured: false, customerName: null },
+      'en-IN',
+    ).text()
+
+    expect(html).toContain('<html lang="en-IN">')
+    expect(html).toContain('English ya Hinglish—jismein aap comfortable hain.')
+    expect(html).toContain('placeholder="Ask in English or Hinglish"')
+    expect(html).toContain('aria-label="Ask in English or Hinglish"')
+  })
+
   it('renders escaped live help topics with conventional knowledge links', async () => {
     const html = await voiceDemoPageResponse(BRANDING, '', false, [{
       slug: 'machines & care',

@@ -46,6 +46,8 @@ export default {
       stream?: unknown
       contact?: unknown
       signedIn?: unknown
+      locale?: unknown
+      timezone?: unknown
     } | null
     const messages = messagesFrom(body?.messages)
     if (!messages) return Response.json({ error: 'invalid_messages' }, { status: 400 })
@@ -127,7 +129,12 @@ export default {
         reasoning_effort: null,
         chat_template_kwargs: { enable_thinking: false },
       }),
-      system: voiceAgentSystemPrompt('Example Company', { orders: Boolean(ordersCase), signedIn: signedInCase }),
+      system: voiceAgentSystemPrompt('Example Company', {
+        orders: Boolean(ordersCase),
+        signedIn: signedInCase,
+        ...(typeof body?.locale === 'string' ? { locale: body.locale } : {}),
+        ...(typeof body?.timezone === 'string' ? { timezone: body.timezone } : {}),
+      }),
       messages: prepareVoiceModelMessages(messages as Array<{ role: 'user' | 'assistant'; content: string }>),
       tools: {
         // Mirrors production: the help-centre tool is always registered.

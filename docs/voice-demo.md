@@ -30,6 +30,8 @@ The browser uses `VoiceClient` from `@cloudflare/voice`. Audio travels over a We
 
 Every browser tab gets a random Durable Object instance name. The voice mixin keeps bounded conversation context in that object's SQLite storage. Ending a call, closing its WebSocket, or choosing **Start over** deletes the voice-message rows. The stated contact lasts only for the WebSocket connection.
 
+For an `en-IN` / `Asia/Kolkata` workspace, Ava understands Indian English, Hindi, Roman Hindi, and Hinglish, mirrors the customer's language, uses Roman-script Hinglish unless the customer prefers Devanagari, and keeps prices, dates, and times in the expected India formats. The page explicitly invites English or Hinglish. This language behaviour is part of the model and text experience; the built-in `@cf/deepgram/aura-1` speaker is not presented as a native Indian/Hindi voice. A deployment that needs native Hindi/Hinglish speech must configure a multilingual speech provider and an India-trained voice after its Cloudflare voice adapter is available and tested.
+
 ## Agent capabilities
 
 - answer support questions grounded in the published knowledge base via `search_help_center`, with the matching articles linked in the UI;
@@ -62,7 +64,7 @@ npx wrangler login
 npm run eval:voice
 ```
 
-The suite runs the configured production model through an isolated local Worker with fake ticket creation, order fixtures, and help-centre article fixtures. It checks support scope, fragmented ticket intake, non-repetitive and empathetic progression, truthful status-unavailable handling, one-shot ticket creation with a spoken case reference, sensitive-data refusal, order lookup (asks for the number, grounded read-back, oracle-safe not-found, honest outage copy), anonymous grounded help, in-thread contact requests, and post-contact continuation. A how-to question must call `search_help_center` and answer only from returned article content without inventing facts or URLs; a no-match search must admit the gap and offer the appropriate order or ticket path. It uses remote Workers AI and therefore consumes inference quota, but it cannot read or mutate production Helpdesk data. Deterministic fragment and secret checks also run in the normal `npm test` gate.
+The suite runs the configured production model through an isolated local Worker with fake ticket creation, order fixtures, and help-centre article fixtures. It checks support scope, grounded Hinglish for an India workspace, fragmented ticket intake, non-repetitive and empathetic progression, truthful status-unavailable handling, one-shot ticket creation with a spoken case reference, sensitive-data refusal, order lookup (asks for the number, grounded read-back, oracle-safe not-found, honest outage copy), anonymous grounded help, in-thread contact requests, and post-contact continuation. A how-to question must call `search_help_center` and answer only from returned article content without inventing facts or URLs; a no-match search must admit the gap and offer the appropriate order or ticket path. It uses remote Workers AI and therefore consumes inference quota, but it cannot read or mutate production Helpdesk data. Deterministic fragment and secret checks also run in the normal `npm test` gate.
 
 ## Security and operations
 

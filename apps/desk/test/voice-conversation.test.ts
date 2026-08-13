@@ -170,7 +170,12 @@ describe('voice conversation policy', () => {
       timezone: 'Asia/Kolkata',
     })
     expect(india).toContain('INDIA CUSTOMER EXPERIENCE')
-    expect(india).toContain('natural Indian English')
+    expect(india).toContain('Indian English, Hindi, and Hinglish')
+    expect(india).toContain('Hindi in Devanagari, Roman-script Hindi')
+    expect(india).toContain("Mirror the customer's language naturally")
+    expect(india).toContain('prefer Roman script')
+    expect(india).toContain('without caricaturing an accent')
+    expect(india).toContain('Aapka budget kitna hai?')
     expect(india).toContain('₹')
     expect(india).toContain('Never assume GST invoice eligibility')
     expect(voiceAgentSystemPrompt('Example Company', { locale: 'en-SG' }))

@@ -256,6 +256,7 @@ async function portalResponse(request: Request, env: Env, ctx: ExecutionContext)
         configured: shopifyCustomerConfigured(env),
         customerName: customerSession?.name ?? null,
       },
+      settings.locale,
     )
   }
   const helpdesk = createHelpdesk({

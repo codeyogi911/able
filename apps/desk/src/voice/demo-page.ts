@@ -80,7 +80,14 @@ export function voiceDemoPageResponse(
   ordersEnabled = false,
   topics: VoiceHelpTopic[] = [],
   identity: VoiceIdentityView = { configured: false, customerName: null },
+  locale = 'en',
 ): Response {
+  const indiaExperience = locale.toLowerCase() === 'en-in'
+  const pageLanguage = indiaExperience ? 'en-IN' : 'en'
+  const askPlaceholder = indiaExperience ? 'Ask in English or Hinglish' : 'Ask anything'
+  const languageInvitation = indiaExperience
+    ? ' English ya Hinglish—jismein aap comfortable hain.'
+    : ''
   const title = /\bsupport$/i.test(branding.displayName.trim())
     ? `${branding.displayName} — assistant`
     : `${branding.displayName} support assistant`
@@ -127,7 +134,7 @@ export function voiceDemoPageResponse(
             </section>`).join('\n            ')
     : `<p class="topics-empty">Help articles are being prepared. Ava can still help you now.</p>`
   return new Response(`<!doctype html>
-<html lang="en">
+<html lang="${pageLanguage}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -167,10 +174,10 @@ export function voiceDemoPageResponse(
           <div id="landing-panel" class="landing-panel">
             <section class="landing-hero" aria-labelledby="help-title">
               <h1 id="help-title">How can we help?</h1>
-              <p class="landing-lede">Ask Ava anything about ${escapeText(workspaceShortName(branding.displayName))}, start a common task, or open a private support request. She answers from our help articles and can bring in the team when you need them.</p>
+              <p class="landing-lede">Ask Ava anything about ${escapeText(workspaceShortName(branding.displayName))}, start a common task, or open a private support request. She answers from our help articles and can bring in the team when you need them.${languageInvitation}</p>
               <form id="landing-form" class="ask-composer">
                 <span class="ask-icon" aria-hidden="true">${avatar}</span>
-                <input id="landing-input" name="question" autocomplete="off" maxlength="500" placeholder="Ask anything" aria-label="Ask anything">
+                <input id="landing-input" name="question" autocomplete="off" maxlength="500" placeholder="${askPlaceholder}" aria-label="${askPlaceholder}">
                 <button id="landing-mic-button" class="mic-button ask-mic-button" type="button" aria-label="Use voice" title="Talk instead of typing" disabled>
                   <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10v1a7 7 0 0 0 14 0v-1"></path><path d="M12 18v4"></path></svg>
                 </button>
