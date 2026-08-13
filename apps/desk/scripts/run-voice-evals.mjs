@@ -133,6 +133,39 @@ try {
   assertNoRepeatedSentence(hinglishReply, 'Hinglish reply')
   console.log(`PASS india_hinglish_grounding: ${hinglishReply}`)
 
+  const hinglishTroubleshooting = await turn(
+    [{ role: 'user', content: 'DF54 grinder clean karne ke baad start nahi ho raha. Kya check karoon?' }],
+    null,
+    {
+      locale: 'en-IN',
+      timezone: 'Asia/Kolkata',
+      kb: {
+        articles: [{
+          title: 'Grinder not working after cleaning? Check the reassembly',
+          content: 'Unplug the grinder. Remove and reinstall the upper burr carrier, aligning its marks before locking it into place. Then reinstall the hopper and try power again.',
+        }],
+      },
+    },
+  )
+  const troubleshootingReply = String(hinglishTroubleshooting.text ?? '')
+  const troubleshootingTools = Array.isArray(hinglishTroubleshooting.toolCalls)
+    ? hinglishTroubleshooting.toolCalls
+    : []
+  assert(
+    troubleshootingTools.some((call) => call?.name === 'search_help_center'),
+    `Hinglish troubleshooting must search the help centre: ${JSON.stringify(hinglishTroubleshooting)}`,
+  )
+  assert(
+    /burr carrier|align|marks|reinstall/i.test(troubleshootingReply),
+    `Hinglish troubleshooting must use the returned reassembly step: ${troubleshootingReply}`,
+  )
+  assert(
+    !/no (?:direct )?guide|no information|koi (?:direct )?guide nahi|ticket (?:open|raise)/i.test(troubleshootingReply),
+    `A successful help result must not be described as missing: ${troubleshootingReply}`,
+  )
+  assertNoRepeatedSentence(troubleshootingReply, 'Hinglish troubleshooting reply')
+  console.log(`PASS india_hinglish_troubleshooting: ${troubleshootingReply}`)
+
   const intakeHistory = []
   const intakeResults = []
   intakeResults.push(await converse(intakeHistory, 'Can you open a new support'))

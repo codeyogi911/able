@@ -142,6 +142,8 @@ describe('voice conversation policy', () => {
     expect(configured).toContain('shopping, selection, price, or catalog-availability question uses the storefront tools')
     expect(configured).toContain('repair, or troubleshooting question')
     expect(configured).toContain('Do not ask the caller to identify or correct the product before that search')
+    expect(configured).toContain('that is a documented answer')
+    expect(configured).toContain('never say that no guide, no direct guide, or no information was found')
     expect(configured).toContain('never invent specifications, compatibility, price, availability, variants, or recommendations')
 
     const unavailable = voiceAgentSystemPrompt('Example Company', {
