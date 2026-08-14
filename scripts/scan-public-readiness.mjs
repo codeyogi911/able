@@ -8,7 +8,11 @@ import { promisify } from 'node:util'
 const root = process.cwd()
 const ignoredDirectories = new Set(['.git', '.wrangler', 'node_modules', 'dist', 'coverage', 'playwright-report', 'test-results'])
 const ignoredFiles = new Set(['package-lock.json', 'worker-configuration.d.ts', 'wrangler.production.generated.json'])
-const forbiddenNames = [/\.sqlite(?:3)?$/i, /\.db$/i, /\.zip$/i, /\.pem$/i, /\.p12$/i, /\.pfx$/i, /\.key$/i, /^\.npmrc$/, /^\.dev\.vars$/, /^\.env(?:\.|$)/]
+// `*.local.md` is the declared slot for a deployer's private context
+// (AGENTS.local.md). It is git-ignored, so this only fires when one is force
+// added — which is exactly the mistake worth blocking. The committed
+// AGENTS.local.example.md template does not match.
+const forbiddenNames = [/\.sqlite(?:3)?$/i, /\.db$/i, /\.zip$/i, /\.pem$/i, /\.p12$/i, /\.pfx$/i, /\.key$/i, /\.local\.md$/i, /^\.npmrc$/, /^\.dev\.vars$/, /^\.env(?:\.|$)/]
 // Deployment-specific identities do not belong in this public repository,
 // even as an encoded denylist. Private release automation can inject one
 // token per line without teaching the source tree those values.
@@ -16,7 +20,7 @@ const customerTokens = (process.env.ABLE_PRIVATE_DENYLIST ?? '')
   .split(/\r?\n/)
   .map((value) => value.trim())
   .filter(Boolean)
-const required = ['LICENSE', 'README.md', 'SECURITY.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'docs/architecture.md', 'docs/deployment.md', 'docs/privacy-and-backups.md']
+const required = ['LICENSE', 'README.md', 'SECURITY.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md', 'AGENTS.local.example.md', 'docs/adopt.md', 'docs/architecture.md', 'docs/deployment.md', 'docs/privacy-and-backups.md']
 const textExtensions = new Set(['', '.css', '.html', '.js', '.json', '.jsonc', '.md', '.mjs', '.sql', '.ts', '.tsx', '.txt', '.yaml', '.yml'])
 
 async function walk(directory) {

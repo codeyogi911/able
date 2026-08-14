@@ -9,7 +9,9 @@ Able Desk is the first application. It combines a support desk, customer directo
 
 > **Project status:** early V1. The architecture and core Desk flows are implemented and tested, but Able does not yet claim production readiness. A deployed Worker is not, by itself, an operational support desk.
 
-[Project site](https://codeyogi911.github.io/able-site/) · [V1 contract](docs/product-v1.md) · [Roadmap](docs/roadmap.md) · [Architecture overview](docs/architecture-overview.md) · [Architecture reference](docs/architecture.md)
+**Running it for your business?** Start with [docs/adopt.md](docs/adopt.md) — Able deploys into your own Cloudflare account, on your domains, holding your data. There is no hosted service.
+
+[Project site](https://codeyogi911.github.io/able-site/) · [Adopt Able](docs/adopt.md) · [V1 contract](docs/product-v1.md) · [Roadmap](docs/roadmap.md) · [Architecture overview](docs/architecture-overview.md) · [Architecture reference](docs/architecture.md)
 
 ![Able Desk architecture overview](docs/assets/architecture-overview.svg)
 
@@ -43,8 +45,9 @@ able/
 ├── apps/
 │   └── desk/          # Buildable Desk Worker, migrations, tests, assets, and configs
 ├── packages/          # Future reusable modules, extracted only behind proven interfaces
-├── docs/              # Product contract, architecture visuals, ADRs, deployment, and roadmap
+├── docs/              # Adopter guide, product contract, architecture, ADRs, deployment, roadmap
 ├── scripts/           # Repository-wide publication and history gates
+├── .claude/skills/    # Committed agent skills, including the guided deployment driver
 └── .github/           # CI, security scanning, and contributor templates
 ```
 
