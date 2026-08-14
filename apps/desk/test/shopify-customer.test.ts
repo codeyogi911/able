@@ -8,6 +8,7 @@ import {
   shopifyCustomerContext,
   signShopifyCustomerSession,
   verifyShopifyCustomerSession,
+  verifyShopifySupportResume,
 } from '../src/identity/shopify-customer'
 
 const ENV = { SHOPIFY_SHOP_DOMAIN: 'shop.example.test', SHOPIFY_CUSTOMER_CLIENT_ID: 'client-123' }
@@ -92,6 +93,47 @@ describe('login begin and completion', () => {
 
     const verified = await verifyShopifyCustomerSession(SECRET, completed!.sessionToken)
     expect(verified).toMatchObject({ email: 'rhea@example.test' })
+  })
+
+  it('binds a support conversation to the signed OAuth round trip', async () => {
+    const fetcher = discoveryFetcher()
+    const supportSession = `voice-${'a'.repeat(20)}`
+    const started = await beginShopifyCustomerLogin(
+      ENV,
+      { redirectUri: REDIRECT, secret: SECRET, supportSession },
+      { fetcher, now: () => 1_000 },
+    )
+    const state = new URL(started!.url).searchParams.get('state')!
+    const completed = await completeShopifyCustomerLogin(ENV, {
+      code: 'auth-code',
+      state,
+      transactionToken: started!.transactionToken,
+      redirectUri: REDIRECT,
+      secret: SECRET,
+    }, { fetcher, now: () => 1_000 })
+
+    expect(completed?.supportResumeToken).toBeTruthy()
+    expect(await verifyShopifySupportResume(SECRET, completed?.supportResumeToken, 1_001)).toBe(supportSession)
+    expect(await verifyShopifySupportResume(SECRET, completed?.supportResumeToken, 1_000 + 121_000)).toBeNull()
+    expect(await verifyShopifySupportResume('wrong-secret', completed?.supportResumeToken, 1_001)).toBeNull()
+  })
+
+  it('does not bind malformed support session names into OAuth state', async () => {
+    const fetcher = discoveryFetcher()
+    const started = await beginShopifyCustomerLogin(
+      ENV,
+      { redirectUri: REDIRECT, secret: SECRET, supportSession: '../../another-agent' },
+      { fetcher },
+    )
+    const state = new URL(started!.url).searchParams.get('state')!
+    const completed = await completeShopifyCustomerLogin(ENV, {
+      code: 'auth-code',
+      state,
+      transactionToken: started!.transactionToken,
+      redirectUri: REDIRECT,
+      secret: SECRET,
+    }, { fetcher })
+    expect(completed?.supportResumeToken).toBeNull()
   })
 
   it('rejects a state that does not match the signed transaction', async () => {

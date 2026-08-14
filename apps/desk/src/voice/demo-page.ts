@@ -72,6 +72,8 @@ export type VoiceIdentityView = {
   configured: boolean
   /** The signed-in customer's display name, or null when anonymous. */
   customerName: string | null
+  /** OAuth-bound conversation to hydrate exactly once after hosted login. */
+  resumeSessionName?: string | null
 }
 
 export function voiceDemoPageResponse(
@@ -157,7 +159,7 @@ export function voiceDemoPageResponse(
   </head>
   <body>
     <a class="skip-link" href="#thread">Skip to support</a>
-    <div id="support-app" class="app" data-view="landing" data-connection="connecting" data-voice-input="${voiceInputAvailable ? 'available' : 'unavailable'}">
+    <div id="support-app" class="app" data-view="landing" data-connection="connecting" data-voice-input="${voiceInputAvailable ? 'available' : 'unavailable'}"${identity.resumeSessionName ? ` data-resume-session="${escapeAttribute(identity.resumeSessionName)}"` : ''}>
       <header class="chat-header">
         <div class="chat-header-inner">
           <a class="brand" href="${escapeAttribute(branding.homeUrl ?? '/')}" aria-label="${escapeAttribute(`${branding.displayName} home`)}">

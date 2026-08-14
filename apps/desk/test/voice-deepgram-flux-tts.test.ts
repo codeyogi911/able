@@ -168,4 +168,50 @@ describe('WorkersAIPcmTTS', () => {
       { returnRawResponse: true },
     )
   })
+
+  it('forwards aligned audio frames before the full Aura response completes', async () => {
+    let finish!: () => void
+    const waiting = new Promise<void>((resolve) => { finish = resolve })
+    const first = new Uint8Array(4_800).fill(1)
+    const second = new Uint8Array(2).fill(2)
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        controller.enqueue(first)
+        await waiting
+        controller.enqueue(second)
+        controller.close()
+      },
+    })
+    const run = vi.fn(async () => new Response(body))
+    const tts = new WorkersAIPcmTTS({ run })
+    const stream = tts.synthesizeStream('Hello')[Symbol.asyncIterator]()
+
+    await expect(stream.next()).resolves.toMatchObject({ done: false, value: first.buffer })
+    finish()
+    await expect(stream.next()).resolves.toMatchObject({ done: false, value: second.buffer })
+    await expect(stream.next()).resolves.toEqual({ done: true, value: undefined })
+  })
+
+  it('coalesces arbitrary Workers AI chunks onto complete PCM samples', async () => {
+    const expected = new Uint8Array(4_802).map((_, index) => index % 251)
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(expected.slice(0, 3_001))
+        controller.enqueue(expected.slice(3_001))
+        controller.close()
+      },
+    })
+    const tts = new WorkersAIPcmTTS({ run: vi.fn(async () => new Response(body)) })
+    const frames: ArrayBuffer[] = []
+    for await (const frame of tts.synthesizeStream('Hello')) frames.push(frame)
+
+    expect(frames.map((frame) => frame.byteLength)).toEqual([4_800, 2])
+    const actual = new Uint8Array(frames.reduce((total, frame) => total + frame.byteLength, 0))
+    let offset = 0
+    for (const frame of frames) {
+      actual.set(new Uint8Array(frame), offset)
+      offset += frame.byteLength
+    }
+    expect(actual).toEqual(expected)
+  })
 })

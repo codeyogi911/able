@@ -149,6 +149,7 @@ async function installVoiceSocketFixture(
     signinReason?: 'order_lookup' | 'open_ticket'
     errorOnReply?: boolean
     productResults?: boolean
+    restoredHistory?: Array<{ role: 'user' | 'assistant'; text: string }>
   } = {},
 ): Promise<VoiceSocketFixture> {
   let socket: WebSocketRoute | null = null
@@ -184,7 +185,10 @@ async function installVoiceSocketFixture(
       }
 
       if (parsed.type === 'start_voice_session') {
-        if (readyReleased) sendReady()
+        if (readyReleased) {
+          if (options.restoredHistory) send({ type: 'voice_history', messages: options.restoredHistory })
+          sendReady()
+        }
         else readyPending = true
         return
       }
@@ -255,6 +259,7 @@ async function installVoiceSocketFixture(
       readyReleased = true
       if (!readyPending) return
       readyPending = false
+      if (options.restoredHistory) send({ type: 'voice_history', messages: options.restoredHistory })
       sendReady()
     },
   }
@@ -382,7 +387,12 @@ test('the sign-in hand-off renders one card and no typed identity', async ({ pag
 
 test('returning from sign-in resumes the conversation without leaking the continuation', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-390', 'The sign-in return leg is covered once.')
-  await installVoiceSocketFixture(page)
+  await installVoiceSocketFixture(page, {
+    restoredHistory: [
+      { role: 'user', text: 'Please help me with my delayed order.' },
+      { role: 'assistant', text: 'Sign in below and I will continue with this order.' },
+    ],
+  })
   // The client stashes its session name before redirecting; simulate the
   // return leg of the hosted-login round trip.
   await page.addInitScript(() => {
@@ -391,6 +401,8 @@ test('returning from sign-in resumes the conversation without leaking the contin
   await page.goto('/?signed_in=1', { waitUntil: 'networkidle' })
 
   // The continuation turn resumes the flow but stays out of the transcript.
+  await expect(page.getByText('Please help me with my delayed order.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Sign in below and I will continue with this order.', { exact: true })).toBeVisible()
   await expect(page.getByLabel('Conversation with Ava').getByText('Deterministic support answer 1.', { exact: false })).toBeVisible()
   await expect(page.getByText('I have signed in with my store account', { exact: false })).toHaveCount(0)
   await expect(page).toHaveURL(/\/$/)
@@ -674,6 +686,27 @@ test('first question transitions into the focused answer experience', async ({ p
   await expect(page.locator('#transcript')).toBeVisible()
   await expect(page.getByLabel('Ask a follow-up')).toBeVisible()
   await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible()
+
+  const outgoingColors = await page.locator('.answer-turn--user .turn-copy').first().evaluate((element) => {
+    const style = getComputedStyle(element)
+    const channel = (value: string) => value.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? []
+    const luminance = (value: string) => {
+      const [red = 0, green = 0, blue = 0] = channel(value).map((item) => {
+        const normalized = item / 255
+        return normalized <= .04045 ? normalized / 12.92 : ((normalized + .055) / 1.055) ** 2.4
+      })
+      return .2126 * red + .7152 * green + .0722 * blue
+    }
+    const foreground = luminance(style.color)
+    const background = luminance(style.backgroundColor)
+    return {
+      color: style.color,
+      background: style.backgroundColor,
+      contrast: (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05),
+    }
+  })
+  expect(outgoingColors).toMatchObject({ color: 'rgb(0, 96, 191)', background: 'rgb(234, 244, 255)' })
+  expect(outgoingColors.contrast).toBeGreaterThanOrEqual(4.5)
 
   await page.getByRole('button', { name: 'New conversation' }).click()
   await expect(page.locator('#support-app')).toHaveAttribute('data-view', 'landing')
