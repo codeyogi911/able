@@ -26,8 +26,11 @@ const TRACKING_LIMIT = 5
 
 export const SHOPIFY_CUSTOMER_SESSION_COOKIE = 'able_shopify_customer'
 export const SHOPIFY_CUSTOMER_LOGIN_COOKIE = 'able_shopify_login'
+export const SHOPIFY_CUSTOMER_RESUME_COOKIE = 'able_shopify_resume'
 /** Login transactions are short-lived: the redirect round-trip only. */
 export const SHOPIFY_LOGIN_TRANSACTION_TTL_SECONDS = 10 * 60
+/** One navigation only: enough for the callback to render the resumed chat. */
+export const SHOPIFY_SUPPORT_RESUME_TTL_SECONDS = 2 * 60
 export const SHOPIFY_CUSTOMER_SESSION_MAX_SECONDS = 60 * 60
 
 type ShopifyCustomerEnv = {
@@ -56,11 +59,17 @@ export type ShopifyCustomerContextResult =
   | { status: 'ok'; customer: { name: string; email: string | null; orders: ShopifyCustomerOrder[] } }
   | { status: 'unavailable' }
 
-type LoginTransaction = { state: string; verifier: string; expiresAt: number }
+type LoginTransaction = { state: string; verifier: string; expiresAt: number; supportSession?: string }
+type SupportResume = { supportSession: string; expiresAt: number }
 
 type Discovery = { authorizationEndpoint: string; tokenEndpoint: string; graphqlEndpoint: string }
 
 const encoder = new TextEncoder()
+const SUPPORT_SESSION_PATTERN = /^voice-[a-z0-9]{20}$/
+
+function supportSessionName(value: string | null | undefined): string | null {
+  return value && SUPPORT_SESSION_PATTERN.test(value) ? value : null
+}
 
 function shopHostname(domain: string | undefined): string | null {
   const trimmed = (domain ?? '').trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '')
@@ -181,7 +190,7 @@ export type ShopifyLoginStart = { url: string; transactionToken: string }
  */
 export async function beginShopifyCustomerLogin(
   env: ShopifyCustomerEnv,
-  input: { redirectUri: string; secret: string },
+  input: { redirectUri: string; secret: string; supportSession?: string | null },
   options: { fetcher?: typeof fetch; now?: () => number; timeoutMs?: number } = {},
 ): Promise<ShopifyLoginStart | null> {
   const hostname = shopHostname(env.SHOPIFY_SHOP_DOMAIN)
@@ -204,7 +213,13 @@ export async function beginShopifyCustomerLogin(
   url.searchParams.set('code_challenge', challenge)
   url.searchParams.set('code_challenge_method', 'S256')
 
-  const transaction: LoginTransaction = { state, verifier, expiresAt: now + SHOPIFY_LOGIN_TRANSACTION_TTL_SECONDS * 1000 }
+  const supportSession = supportSessionName(input.supportSession)
+  const transaction: LoginTransaction = {
+    state,
+    verifier,
+    expiresAt: now + SHOPIFY_LOGIN_TRANSACTION_TTL_SECONDS * 1000,
+    ...(supportSession ? { supportSession } : {}),
+  }
   return { url: url.toString(), transactionToken: await signToken(input.secret, transaction) }
 }
 
@@ -218,7 +233,7 @@ export async function completeShopifyCustomerLogin(
   env: ShopifyCustomerEnv,
   input: { code: string; state: string; transactionToken: string; redirectUri: string; secret: string },
   options: { fetcher?: typeof fetch; now?: () => number; timeoutMs?: number } = {},
-): Promise<{ session: ShopifyCustomerSession; sessionToken: string } | null> {
+): Promise<{ session: ShopifyCustomerSession; sessionToken: string; supportResumeToken: string | null } | null> {
   const hostname = shopHostname(env.SHOPIFY_SHOP_DOMAIN)
   const clientId = env.SHOPIFY_CUSTOMER_CLIENT_ID?.trim()
   if (!hostname || !clientId || !input.secret || !input.code || !input.state) return null
@@ -273,7 +288,26 @@ export async function completeShopifyCustomerLogin(
     logOutcome('missing_email')
     return null
   }
-  return { session, sessionToken: await signToken(input.secret, session) }
+  const supportSession = supportSessionName(transaction.supportSession)
+  const supportResumeToken = supportSession
+    ? await signToken(input.secret, {
+      supportSession,
+      expiresAt: now + SHOPIFY_SUPPORT_RESUME_TTL_SECONDS * 1_000,
+    } satisfies SupportResume)
+    : null
+  return { session, sessionToken: await signToken(input.secret, session), supportResumeToken }
+}
+
+/** Resolve the one-use, OAuth-bound support session after the callback. */
+export async function verifyShopifySupportResume(
+  secret: string,
+  token: string | null | undefined,
+  now: number = Date.now(),
+): Promise<string | null> {
+  if (!secret || !token) return null
+  const parsed = await verifyToken(secret, token) as SupportResume | null
+  if (!parsed || typeof parsed.expiresAt !== 'number' || parsed.expiresAt < now) return null
+  return supportSessionName(parsed.supportSession)
 }
 
 /** Sign a customer session into the transportable cookie token form. */

@@ -4,7 +4,9 @@ import {
   directVoiceResponse,
   inrBudgetFromTranscript,
   isHelpCenterSupportRequest,
+  isOrderPlacementRequest,
   isStorefrontShoppingRequest,
+  ORDER_PLACEMENT_UNAVAILABLE_REPLY,
   prepareVoiceModelMessages,
   speechText,
   productComparisonReply,
@@ -21,6 +23,17 @@ describe('voice conversation policy', () => {
     expect(isStorefrontShoppingRequest('Help me find an espresso grinder under ₹30,000')).toBe(true)
     expect(isStorefrontShoppingRequest('How do I clean my grinder?')).toBe(false)
     expect(isStorefrontShoppingRequest('What does the warranty cover?')).toBe(false)
+  })
+
+  it('blocks commerce writes without confusing ordinary product questions', () => {
+    expect(isOrderPlacementRequest('Please place an order for the H10 for me')).toBe(true)
+    expect(isOrderPlacementRequest('Order this one for me')).toBe(true)
+    expect(isOrderPlacementRequest('Add it to my cart')).toBe(true)
+    expect(isOrderPlacementRequest('I want to buy the H10')).toBe(true)
+    expect(isOrderPlacementRequest('Can I buy the H10 in India?')).toBe(false)
+    expect(isOrderPlacementRequest('Where is my order?')).toBe(false)
+    expect(isOrderPlacementRequest('Can you confirm my order status?')).toBe(false)
+    expect(ORDER_PLACEMENT_UNAVAILABLE_REPLY).toContain('Nothing has been ordered or charged')
   })
 
   it('deterministically recognizes support questions that require grounding', () => {
@@ -111,6 +124,13 @@ describe('voice conversation policy', () => {
     const configured = voiceAgentSystemPrompt('Example Company', { orders: true, signedIn: false })
     expect(configured).toContain('I can check your order and get the team on it')
     expect(configured).not.toContain('Order lookup is not available in this workspace.')
+  })
+
+  it('states that order placement and payment are not connected', () => {
+    const prompt = voiceAgentSystemPrompt('Example Company', { orders: true, products: true, signedIn: true })
+    expect(prompt).toContain('cannot add products to a cart')
+    expect(prompt).toContain('Never claim an order was placed')
+    expect(prompt).toContain('nothing has been ordered or charged')
   })
 
   it('routes anonymous identity actions through store sign-in, never typed contact details', () => {

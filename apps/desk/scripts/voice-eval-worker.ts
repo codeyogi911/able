@@ -4,6 +4,8 @@ import { z } from 'zod'
 import {
   directVoiceResponse,
   isHelpCenterSupportRequest,
+  isOrderPlacementRequest,
+  ORDER_PLACEMENT_UNAVAILABLE_REPLY,
   prepareVoiceModelMessages,
   UNDOCUMENTED_PRODUCT_SIGNIN_ORDER_REPLY,
   UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY,
@@ -72,6 +74,19 @@ export default {
       )
       : null
     if (directResponse) return Response.json({ text: directResponse, toolCalls: [], direct: true })
+
+    if (latest?.role === 'user' && typeof latest.content === 'string' && isOrderPlacementRequest(latest.content)) {
+      return Response.json({ text: ORDER_PLACEMENT_UNAVAILABLE_REPLY, toolCalls: [], direct: true })
+    }
+
+    const originalRequest = latest?.role === 'user' && latest.content === SIGN_IN_CONTINUATION
+      ? [...messages]
+        .reverse()
+        .find((message) => message.role === 'user' && message.content !== SIGN_IN_CONTINUATION)
+      : null
+    if (originalRequest && isOrderPlacementRequest(String(originalRequest.content))) {
+      return Response.json({ text: ORDER_PLACEMENT_UNAVAILABLE_REPLY, toolCalls: [], direct: true })
+    }
 
     // Production persists an ordinary ticket request as a pending escalation
     // before navigating to Shopify sign-in, then opens it deterministically on

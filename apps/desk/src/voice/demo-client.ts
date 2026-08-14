@@ -22,6 +22,8 @@ import './demo.css'
 import { renderStreamingMarkdown } from '../ui/markdown-client'
 import { SIGN_IN_CONTINUATION } from './contact'
 import { HUMAN_HELP_MESSAGE } from './escalation'
+import { AssistantPlaybackGuard, PlaybackAwareVoiceTransport } from './playback-guard'
+import { mergeConversationHistory } from './conversation-history'
 
 function required<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector)
@@ -100,9 +102,10 @@ function sessionName(): string {
   // exception: returning from the hosted store sign-in resumes the exact
   // conversation that requested it.
   if (returnedFromSignIn) {
+    const serverResume = elements.app.dataset.resumeSession
+    if (serverResume && /^voice-[a-z0-9]{20}$/.test(serverResume)) return serverResume
     try {
       const stored = sessionStorage.getItem(SIGNIN_RESUME_KEY)
-      sessionStorage.removeItem(SIGNIN_RESUME_KEY)
       if (stored && /^voice-[a-z0-9]{20}$/.test(stored)) return stored
     } catch {
       // Fall through to a fresh session.
@@ -114,10 +117,33 @@ function sessionName(): string {
 const activeSessionName = sessionName()
 if (returnedFromSignIn) history.replaceState(null, '', window.location.pathname)
 
-const client = new VoiceClient({
+let assistantMicPaused = false
+let guardAppliedMute = false
+let client: VoiceClient
+const playbackGuard = new AssistantPlaybackGuard((suppressed) => {
+  assistantMicPaused = suppressed
+  if (suppressed) {
+    guardAppliedMute = !client.isMuted
+    if (guardAppliedMute) client.toggleMute()
+  } else {
+    if (guardAppliedMute && client.isMuted) client.toggleMute()
+    guardAppliedMute = false
+  }
+  updateControls(client.status)
+})
+const voiceTransport = new PlaybackAwareVoiceTransport({
   agent: 'AbleDeskAgent',
   name: activeSessionName,
-  preferredFormat: 'mp3',
+}, playbackGuard)
+
+client = new VoiceClient({
+  agent: 'AbleDeskAgent',
+  name: activeSessionName,
+  transport: voiceTransport,
+  preferredFormat: 'pcm16',
+  // Customer audio is intentionally half-duplex. The playback guard owns
+  // turn-taking, so speaker echo must never trigger the client's barge-in.
+  interruptThreshold: Number.POSITIVE_INFINITY,
 })
 
 let connected = false
@@ -140,6 +166,7 @@ type ProductCard = {
 }
 
 let latestMessages: TranscriptMessage[] = []
+let restoredMessages: TranscriptMessage[] = []
 const hiddenTranscriptMessages = new Set<string>()
 let notes: { anchor: number; text: string }[] = []
 let sources: { anchor: number; articles: SourceArticle[] }[] = []
@@ -684,7 +711,8 @@ function updateControls(status: VoiceStatus): void {
     mic.title = callActive ? 'Stop the voice call' : voiceInputAvailable ? 'Talk instead of typing' : 'Streaming voice is available on deployed Workers'
   }
   elements.muteButton.hidden = !callActive
-  elements.muteButton.disabled = !ready || !callActive
+  elements.muteButton.disabled = !ready || !callActive || assistantMicPaused
+  elements.muteButton.textContent = assistantMicPaused ? 'Mic paused' : client.isMuted ? 'Unmute' : 'Mute'
   elements.clearButton.disabled = false
   elements.transcript.setAttribute('aria-busy', String(awaitingReply || status === 'thinking'))
   elements.landingInput.disabled = false
@@ -694,10 +722,12 @@ function updateControls(status: VoiceStatus): void {
   elements.textInput.disabled = false
   elements.textSubmit.disabled = !canAcceptMessage || elements.textInput.value.trim() === ''
   elements.conversationHumanButton.disabled = !canAcceptMessage
-  elements.app.dataset.voiceState = callActive ? status : 'off'
+  elements.app.dataset.voiceState = callActive ? assistantMicPaused ? 'speaking' : status : 'off'
   elements.voiceState.hidden = !callActive
   if (callActive) {
-    const stateCopy = status === 'thinking'
+    const stateCopy = assistantMicPaused
+      ? 'Ava is speaking · mic paused'
+      : status === 'thinking'
       ? 'Ava is thinking'
       : status === 'speaking'
         ? 'Ava is speaking'
@@ -764,7 +794,7 @@ function beginStoreSignIn(): void {
     // itself still works from a fresh session.
   }
   elements.signinButton.disabled = true
-  window.location.assign('/auth/shopify/start')
+  window.location.assign(`/auth/shopify/start?support_session=${encodeURIComponent(activeSessionName)}`)
 }
 
 type TurnstileApi = {
@@ -874,6 +904,12 @@ function renderCustomMessage(value: unknown): void {
       // Back from the hosted store login: resume the interrupted flow. This is
       // a machine-readable continuation, not customer copy.
       signInContinuationPending = false
+      try {
+        sessionStorage.removeItem(SIGNIN_RESUME_KEY)
+      } catch {
+        // The server-issued one-use resume still completed the hand-off.
+      }
+      delete elements.app.dataset.resumeSession
       hideSignInCard()
       hiddenTranscriptMessages.add(SIGN_IN_CONTINUATION)
       setConversationMode(true)
@@ -890,6 +926,23 @@ function renderCustomMessage(value: unknown): void {
     setConnectionStage('error', copy)
     if (elements.app.dataset.view === 'conversation') pushNote(copy)
     updateControls(client.status)
+    return
+  }
+  if (message.type === 'voice_history') {
+    const now = Date.now()
+    restoredMessages = (Array.isArray(message.messages) ? message.messages : [])
+      .flatMap((entry, index): TranscriptMessage[] => {
+        if (!entry || typeof entry !== 'object') return []
+        const value = entry as Record<string, unknown>
+        if ((value.role !== 'user' && value.role !== 'assistant') || typeof value.text !== 'string') return []
+        const text = value.text.trim()
+        if (!text || text === SIGN_IN_CONTINUATION) return []
+        return [{ role: value.role, text, timestamp: now - 80 + index }]
+      })
+      .slice(-80)
+    latestMessages = mergeConversationHistory(restoredMessages, client.transcript)
+    if (latestMessages.length > 0) setConversationMode(true)
+    renderThread()
     return
   }
   if (message.type === 'voice_signin_required') {
@@ -1029,29 +1082,40 @@ client.addEventListener('connectionchange', (isConnected) => {
   updateControls(client.status)
 })
 client.addEventListener('statuschange', updateControls)
+client.addEventListener('metricschange', (metrics) => {
+  if (!metrics) return
+  client.sendJSON({
+    type: 'voice_pipeline_metrics',
+    llmMs: metrics.llm_ms,
+    ttsMs: metrics.tts_ms,
+    firstAudioMs: metrics.first_audio_ms,
+    totalMs: metrics.total_ms,
+  })
+})
 client.addEventListener('transcriptchange', (messages) => {
-  const receivedReply = messages.some((message, index) => (
+  const mergedMessages = mergeConversationHistory(restoredMessages, messages)
+  const receivedReply = mergedMessages.some((message, index) => (
     message.role === 'assistant'
     && latestMessages[index]?.text !== message.text
   ))
-  const receivedCustomerTurn = messages.some((message, index) => (
+  const receivedCustomerTurn = mergedMessages.some((message, index) => (
     message.role === 'user'
     && latestMessages[index]?.text !== message.text
   ))
-  latestMessages = messages
+  latestMessages = mergedMessages
   if (receivedCustomerTurn) replyFailed = false
-  if (queuedMessageSent && queuedMessage !== null && messages.some((message) => (
+  if (queuedMessageSent && queuedMessage !== null && mergedMessages.some((message) => (
     message.role === 'user' && message.text === queuedMessage
   ))) {
     queuedMessage = null
     queuedMessageSent = false
   }
   if (receivedReply) clearReplyWait()
-  if (messages.length > 0) setConversationMode(true)
+  if (mergedMessages.length > 0) setConversationMode(true)
   updateControls(client.status)
   renderThread()
   if (receivedReply && client.status === 'idle') {
-    const latestReply = [...messages].reverse().find((message) => message.role === 'assistant')?.text.trim()
+    const latestReply = [...mergedMessages].reverse().find((message) => message.role === 'assistant')?.text.trim()
     if (latestReply) announceStatus(`Ava: ${latestReply}`)
   }
 })
@@ -1060,7 +1124,7 @@ client.addEventListener('interimtranscript', (text) => {
   renderThread()
 })
 client.addEventListener('mutechange', (muted) => {
-  elements.muteButton.textContent = muted ? 'Unmute' : 'Mute'
+  elements.muteButton.textContent = assistantMicPaused ? 'Mic paused' : muted ? 'Unmute' : 'Mute'
 })
 client.addEventListener('custommessage', renderCustomMessage)
 client.addEventListener('error', (error) => {
@@ -1084,13 +1148,14 @@ async function toggleVoice(): Promise<void> {
     try {
       await client.startCall()
       callActive = true
-      pushNote('Voice on — speak naturally')
+      pushNote('Voice on — Ava pauses the mic while speaking')
     } catch {
       callActive = false
       pushNote('Microphone access did not start. Check your browser permission, then tap the microphone to try again.')
       announceStatus('Microphone access did not start. Check your browser permission and try again.')
     }
   } else {
+    playbackGuard.reset()
     client.endCall()
     callActive = false
     pushNote('Voice off')
@@ -1106,7 +1171,10 @@ elements.muteButton.addEventListener('click', () => client.toggleMute())
 elements.signinButton.addEventListener('click', beginStoreSignIn)
 
 elements.clearButton.addEventListener('click', () => {
-  if (callActive) client.endCall()
+  if (callActive) {
+    playbackGuard.reset()
+    client.endCall()
+  }
   callActive = false
   clearReplyWait()
   queuedMessage = null
@@ -1115,6 +1183,7 @@ elements.clearButton.addEventListener('click', () => {
   client.sendJSON({ type: 'clear_demo_session' })
   resetReload = setTimeout(reloadFreshSession, 2_000)
   latestMessages = []
+  restoredMessages = []
   notes = []
   sources = []
   products = []

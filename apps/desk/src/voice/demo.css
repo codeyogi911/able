@@ -12,6 +12,9 @@
   --accent-soft: color-mix(in srgb, var(--accent, #c87942) 9%, #ffffff);
   --accent-line: color-mix(in srgb, var(--accent, #c87942) 34%, transparent);
   --focus-ring: var(--ink, #121212);
+  --customer-message: #eaf4ff;
+  --customer-message-ink: #0060bf;
+  --customer-message-line: #bddcff;
   --page: color-mix(in srgb, var(--canvas, #ffffff) 94%, var(--ink, #121212));
   --surface-width: 72rem;
   --answer-width: 52rem;
@@ -346,10 +349,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .markdown-body td { border-bottom: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
 .markdown-body th { background: var(--soft); font-weight: 720; }
 .markdown-body hr { height: 1px; margin: 1em 0; border: 0; background: var(--line); }
-.answer-turn--user .turn-label { padding-right: 4px; }
-.answer-turn--user .turn-copy { max-width: 82%; border: 1px solid var(--accent-line); border-radius: 17px 17px 6px 17px; padding: 12px 15px; background: var(--accent-soft); font-size: 15px; font-weight: 580; letter-spacing: -.01em; line-height: 1.45; }
+.answer-turn--user .turn-label { padding-right: 4px; color: var(--customer-message-ink); }
+.answer-turn--user .turn-copy { max-width: 82%; border: 1px solid var(--customer-message-line); border-radius: 17px 17px 6px 17px; padding: 12px 15px; color: var(--customer-message-ink); background: var(--customer-message); font-size: 15px; font-weight: 580; letter-spacing: -.01em; line-height: 1.45; }
 .answer-turn--user .turn-copy h2 { margin: 0; overflow-wrap: anywhere; font: inherit; }
-.answer-turn--pending { opacity: .65; }
+.answer-turn--pending .turn-copy { border-style: dashed; }
 
 .typing-bubble { min-height: 25px; }
 .typing-dots { display: inline-flex; gap: 4px; align-items: center; }

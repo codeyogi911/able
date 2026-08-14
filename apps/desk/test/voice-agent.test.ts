@@ -191,6 +191,24 @@ describe('voice agent WebSocket boundary', () => {
     }
   })
 
+  it('never claims it can place an order or sends the caller through sign-in', async () => {
+    const socket = await connectAgent(`order-placement-${crypto.randomUUID()}`)
+    try {
+      await proveSession(socket)
+      let signinShown = false
+      socket.addEventListener('message', (event) => {
+        if (typeof event.data === 'string' && JSON.parse(event.data).type === 'voice_signin_required') signinShown = true
+      })
+      const reply = nextMessage(socket, (message) => message.type === 'transcript_end')
+      socket.send(JSON.stringify({ type: 'text_message', text: 'Please place an order for the H10 for me.' }))
+
+      expect(String((await reply).text)).toContain('Nothing has been ordered or charged')
+      expect(signinShown).toBe(false)
+    } finally {
+      socket.close()
+    }
+  })
+
   it('resumes the order flow after the sign-in round trip', async () => {
     // The sign-in hand-off itself navigates away; the pending flow must
     // survive and complete deterministically when the caller returns.
@@ -199,8 +217,51 @@ describe('voice agent WebSocket boundary', () => {
     try {
       await proveSession(first)
       const signinRequested = nextMessage(first, (message) => message.type === 'voice_signin_required')
+      const initialReply = nextMessage(first, (message) => message.type === 'transcript_end')
       first.send(JSON.stringify({ type: 'text_message', text: 'My delivery is delayed.' }))
       await expect(signinRequested).resolves.toMatchObject({ anchor: 'after_reply', reason: 'order_lookup' })
+      await expect(initialReply).resolves.toMatchObject({ type: 'transcript_end' })
+    } finally {
+      first.close()
+    }
+
+    const second = await connectAgent(name, 'http://localhost', await customerCookie('Radha Tester', 'radha@example.test'))
+    try {
+      const restored = nextMessage(second, (message) => message.type === 'voice_history')
+      await proveSession(second)
+      await expect(restored).resolves.toMatchObject({
+        type: 'voice_history',
+        messages: expect.arrayContaining([
+          expect.objectContaining({ role: 'user', text: 'My delivery is delayed.' }),
+          expect.objectContaining({ role: 'assistant' }),
+        ]),
+      })
+      const reply = nextMessage(second, (message) => message.type === 'transcript_end')
+      second.send(JSON.stringify({ type: 'text_message', text: SIGN_IN_CONTINUATION }))
+      const message = await reply
+      // The customer-context read is unavailable against the test shop, and
+      // the reply reports that truthfully instead of claiming no orders.
+      expect(String(message.text)).toContain('trouble checking orders')
+      expect(String(message.text)).not.toMatch(/only help with support|name and email/i)
+    } finally {
+      second.close()
+    }
+  })
+
+  it('does not turn a pre-login purchase request into an order after sign-in', async () => {
+    const name = `order-placement-resume-${crypto.randomUUID()}`
+    const first = await connectAgent(name)
+    try {
+      await proveSession(first)
+      const signinRequested = nextMessage(first, (message) => message.type === 'voice_signin_required')
+      const lookupReply = nextMessage(first, (message) => message.type === 'transcript_end')
+      first.send(JSON.stringify({ type: 'text_message', text: 'Where is my order?' }))
+      await expect(signinRequested).resolves.toMatchObject({ reason: 'order_lookup' })
+      await expect(lookupReply).resolves.toMatchObject({ type: 'transcript_end' })
+
+      const placementReply = nextMessage(first, (message) => message.type === 'transcript_end')
+      first.send(JSON.stringify({ type: 'text_message', text: 'Actually, please order this machine for me.' }))
+      expect(String((await placementReply).text)).toContain('Nothing has been ordered or charged')
     } finally {
       first.close()
     }
@@ -210,11 +271,7 @@ describe('voice agent WebSocket boundary', () => {
       await proveSession(second)
       const reply = nextMessage(second, (message) => message.type === 'transcript_end')
       second.send(JSON.stringify({ type: 'text_message', text: SIGN_IN_CONTINUATION }))
-      const message = await reply
-      // The customer-context read is unavailable against the test shop, and
-      // the reply reports that truthfully instead of claiming no orders.
-      expect(String(message.text)).toContain('trouble checking orders')
-      expect(String(message.text)).not.toMatch(/only help with support|name and email/i)
+      expect(String((await reply).text)).toContain('Nothing has been ordered or charged')
     } finally {
       second.close()
     }

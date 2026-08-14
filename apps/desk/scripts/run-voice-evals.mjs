@@ -6,6 +6,8 @@ const port = Number(process.env.VOICE_EVAL_PORT ?? 8794)
 if (!Number.isInteger(port) || port < 1024 || port > 65_535) throw new Error('VOICE_EVAL_PORT must be an unprivileged TCP port')
 const baseUrl = `http://127.0.0.1:${port}`
 const workerOutput = []
+const SIGN_IN_CONTINUATION =
+  'I have signed in with my store account. Continue what I asked for before signing in.'
 
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -362,6 +364,42 @@ try {
   )
   assertNoRepeatedSentence(signedInReply, 'signed-in order reply')
   console.log(`PASS signed_in_order_list: ${signedInReply}`)
+
+  const placement = await turn(
+    [{ role: 'user', content: 'Please place an order for the H10 for me.' }],
+    { fixtures: [orderFixture] },
+    { signedIn: true, stream: true },
+  )
+  const placementReply = String(placement.text ?? '')
+  const placementTools = Array.isArray(placement.toolCalls) ? placement.toolCalls : []
+  assert(placementTools.length === 0, `order placement must not call a read or write tool: ${JSON.stringify(placement)}`)
+  assert(
+    /can(?:not|['’]t).{0,80}(?:place|order)|can(?:not|['’]t).{0,80}(?:cart|payment|checkout)/i.test(placementReply)
+      && /nothing has been ordered or charged/i.test(placementReply),
+    `order placement refusal must state the capability boundary and outcome truth: ${placementReply}`,
+  )
+  console.log(`PASS order_placement_unavailable: ${placementReply}`)
+
+  const placementAfterLogin = await turn(
+    [
+      { role: 'user', content: 'Please order this machine for me.' },
+      { role: 'assistant', content: 'Sign in below and I will take care of that.' },
+      { role: 'user', content: SIGN_IN_CONTINUATION },
+    ],
+    { fixtures: [orderFixture] },
+    { signedIn: true, stream: true },
+  )
+  const placementAfterLoginReply = String(placementAfterLogin.text ?? '')
+  const placementAfterLoginTools = Array.isArray(placementAfterLogin.toolCalls) ? placementAfterLogin.toolCalls : []
+  assert(
+    placementAfterLoginTools.length === 0,
+    `post-login placement continuation must not call an order tool: ${JSON.stringify(placementAfterLogin)}`,
+  )
+  assert(
+    /nothing has been ordered or charged/i.test(placementAfterLoginReply),
+    `post-login placement continuation must not imply success: ${placementAfterLoginReply}`,
+  )
+  console.log(`PASS order_placement_after_login_unavailable: ${placementAfterLoginReply}`)
 
   // Knowledge-grounded answering: the assistant must consult the help centre
   // and answer strictly from article content.

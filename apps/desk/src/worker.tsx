@@ -38,10 +38,13 @@ import {
   beginShopifyCustomerLogin,
   completeShopifyCustomerLogin,
   SHOPIFY_CUSTOMER_LOGIN_COOKIE,
+  SHOPIFY_CUSTOMER_RESUME_COOKIE,
   SHOPIFY_CUSTOMER_SESSION_COOKIE,
   SHOPIFY_LOGIN_TRANSACTION_TTL_SECONDS,
+  SHOPIFY_SUPPORT_RESUME_TTL_SECONDS,
   shopifyCustomerConfigured,
   verifyShopifyCustomerSession,
+  verifyShopifySupportResume,
 } from './identity/shopify-customer'
 import { acceptWhatsAppWebhook, verifyWhatsAppWebhook } from './whatsapp/webhook'
 import { createCustomerWorkspace } from './suite/customer-workspace'
@@ -179,6 +182,7 @@ async function shopifyAuthResponse(request: Request, env: Env): Promise<Response
     return authRedirect('/', [
       authCookie(SHOPIFY_CUSTOMER_SESSION_COOKIE, '', 0),
       authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0),
+      authCookie(SHOPIFY_CUSTOMER_RESUME_COOKIE, '', 0),
     ])
   }
   const secret = capabilitySecret(request, env)
@@ -186,8 +190,17 @@ async function shopifyAuthResponse(request: Request, env: Env): Promise<Response
   const redirectUri = new URL('/auth/shopify/callback', url.origin).toString()
 
   if (url.pathname === '/auth/shopify/start') {
-    const started = await beginShopifyCustomerLogin(env, { redirectUri, secret })
-    if (!started) return authRedirect('/', [authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0)])
+    const started = await beginShopifyCustomerLogin(env, {
+      redirectUri,
+      secret,
+      supportSession: url.searchParams.get('support_session'),
+    })
+    if (!started) {
+      return authRedirect('/', [
+        authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0),
+        authCookie(SHOPIFY_CUSTOMER_RESUME_COOKIE, '', 0),
+      ])
+    }
     return authRedirect(started.url, [
       authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, started.transactionToken, SHOPIFY_LOGIN_TRANSACTION_TTL_SECONDS),
     ])
@@ -201,7 +214,10 @@ async function shopifyAuthResponse(request: Request, env: Env): Promise<Response
       ? await completeShopifyCustomerLogin(env, { code, state, transactionToken, redirectUri, secret })
       : null
     if (!completed) {
-      return authRedirect('/', [authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0)])
+      return authRedirect('/', [
+        authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0),
+        authCookie(SHOPIFY_CUSTOMER_RESUME_COOKIE, '', 0),
+      ])
     }
     const maxAge = Math.max(60, Math.floor((completed.session.expiresAt - Date.now()) / 1000))
     // The marker lets the assistant resume the conversation that requested
@@ -209,6 +225,9 @@ async function shopifyAuthResponse(request: Request, env: Env): Promise<Response
     return authRedirect('/?signed_in=1', [
       authCookie(SHOPIFY_CUSTOMER_SESSION_COOKIE, completed.sessionToken, maxAge),
       authCookie(SHOPIFY_CUSTOMER_LOGIN_COOKIE, '', 0),
+      completed.supportResumeToken
+        ? authCookie(SHOPIFY_CUSTOMER_RESUME_COOKIE, completed.supportResumeToken, SHOPIFY_SUPPORT_RESUME_TTL_SECONDS)
+        : authCookie(SHOPIFY_CUSTOMER_RESUME_COOKIE, '', 0),
     ])
   }
 
@@ -236,11 +255,16 @@ async function portalResponse(request: Request, env: Env, ctx: ExecutionContext)
   const knowledge = createPublicKnowledge(env.DB)
   if (request.method === 'GET' && url.pathname === '/' && voiceReady) {
     const content = await knowledge.home()
+    const secret = capabilitySecret(request, env)
     const customerSession = await verifyShopifyCustomerSession(
-      capabilitySecret(request, env),
+      secret,
       readCookieValue(request, SHOPIFY_CUSTOMER_SESSION_COOKIE),
     )
-    return voiceDemoPageResponse(
+    const resumeSessionName = await verifyShopifySupportResume(
+      secret,
+      readCookieValue(request, SHOPIFY_CUSTOMER_RESUME_COOKIE),
+    )
+    const response = voiceDemoPageResponse(
       voiceBranding(settings),
       env.TURNSTILE_SITE_KEY,
       shopifyConfigured(env),
@@ -256,10 +280,13 @@ async function portalResponse(request: Request, env: Env, ctx: ExecutionContext)
       {
         configured: shopifyCustomerConfigured(env),
         customerName: customerSession?.name ?? null,
+        resumeSessionName,
       },
       settings.locale,
       env.ABLE_LOCAL_VOICE_UNAVAILABLE !== '1',
     )
+    response.headers.append('set-cookie', authCookie(SHOPIFY_CUSTOMER_RESUME_COOKIE, '', 0))
+    return response
   }
   const helpdesk = createHelpdesk({
     db: env.DB,

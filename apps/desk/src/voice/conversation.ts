@@ -6,6 +6,8 @@ export const UNDOCUMENTED_PRODUCT_SIGNIN_TICKET_REPLY =
   "I don't have a documented guide for that. Sign in with your store account below and I can open a ticket for the team."
 export const UNDOCUMENTED_PRODUCT_FORM_REPLY =
   "I don't have a documented guide for that. Open a support request through the form and the team will take it from there."
+export const ORDER_PLACEMENT_UNAVAILABLE_REPLY =
+  "I can help you choose a product, but I can’t add items to your cart, take payment, or place an order. Nothing has been ordered or charged. Please use the product card or the store checkout to complete the purchase."
 
 export type VoiceModelMessage = { role: 'user' | 'assistant'; content: string }
 
@@ -33,6 +35,15 @@ const HELP_CENTER_SUPPORT_INTENT = /\b(?:how (?:do|can|should) i|troubleshoot|no
 
 export function isStorefrontShoppingRequest(transcript: string): boolean {
   return STOREFRONT_SHOPPING_INTENT.test(transcript.replace(/\s+/g, ' ').trim())
+}
+
+const ORDER_PLACEMENT_ACTION = /\b(?:place|create|make|submit)\b.{0,36}\b(?:an?\s+)?orders?\b|\b(?:can|could|would|will)\s+you\s+order\b|\b(?:please\s+)?order\s+(?:this|that|it|one)(?:\s+for me)?\b|\b(?:buy|purchase)\b.{0,24}\b(?:for me|on my behalf)\b|\b(?:add|put)\b.{0,24}\b(?:to|in)\s+(?:my|the)\s+cart\b|\b(?:check\s*out|checkout)\b.{0,24}\b(?:for me|on my behalf|this|that|it|now)\b/i
+
+/** Side-effecting commerce is not connected; never let the model imply it is. */
+export function isOrderPlacementRequest(transcript: string): boolean {
+  const normalized = transcript.replace(/\s+/g, ' ').trim()
+  return ORDER_PLACEMENT_ACTION.test(normalized)
+    || /\b(?:i\s+)?(?:want|would like|need|am ready|i'm ready)\s+to\s+(?:order|buy|purchase)\b/i.test(normalized)
 }
 
 /**
@@ -289,6 +300,7 @@ When a tool is needed, call it before writing any reply. Never narrate that you 
 ${productCapability}
 For policy or warranty questions, call search_help_center first. For every how-to, product care, shipping, repair, or troubleshooting question, always call search_help_center first with a short topic query of two to six words. Do not ask the caller to identify or correct the product before that search. ${productSourceRouting} Even when you do not recognize the product or the question sounds unusual, search the appropriate source before deciding: never call a product or device question unsupported or out of scope without a search result for it, and never say you lack information unless the appropriate search already returned no_match in this turn. When search_help_center returns status ok with one or more articles, that is a documented answer: answer from the closest returned article and never say that no guide, no direct guide, or no information was found. If the closest guide is general rather than model-specific, say that precisely while still giving its sourced next step. Answer only from the returned article or storefront content. The matching help articles are shown to the caller as links automatically, so give a complete useful answer in natural prose and point them to the linked guide when it contains additional steps. After a successful help result, end the reply after the documented answer. Do not mention or offer a ticket in that reply, even conditionally; wait for the customer to say whether the step worked. If help-centre search returns no_match, say you do not have a documented support answer for that and offer to open a ticket — do not answer such questions from memory. If it returns unavailable, say you cannot check the help articles right now and offer a ticket. Never include a help-centre URL in your reply — the matching articles are already linked for the caller.
 ${actionCapability}
+You cannot add products to a cart, start or complete checkout, take payment, or place, create, submit, confirm, or cancel an order. Those write capabilities are not connected. Never claim an order was placed, confirmed, submitted, purchased, paid for, or charged. If the caller asks you to buy or order something for them, clearly say that nothing has been ordered or charged and direct them to the product card or store checkout.
 You cannot look up or report ticket status in this channel. If the caller asks about an existing ticket's status, say that updates arrive by email through their private case link and that you cannot check status here. Never invent or guess a status. Offer to open a new ticket only if they describe a new problem.
 
 CONVERSATION

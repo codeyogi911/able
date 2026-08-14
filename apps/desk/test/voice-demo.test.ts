@@ -82,6 +82,27 @@ describe('voice demo boundary', () => {
     expect(signedIn).not.toContain('href="/auth/shopify/start"')
   })
 
+  it('renders only a server-verified post-login support session', async () => {
+    const session = `voice-${'a'.repeat(20)}`
+    const resumed = await voiceDemoPageResponse(
+      BRANDING,
+      'turnstile-site-key',
+      true,
+      [],
+      { configured: true, customerName: 'Rhea Kapoor', resumeSessionName: session },
+    ).text()
+    expect(resumed).toContain(`data-resume-session="${session}"`)
+
+    const ordinary = await voiceDemoPageResponse(
+      BRANDING,
+      'turnstile-site-key',
+      true,
+      [],
+      { configured: true, customerName: 'Rhea Kapoor' },
+    ).text()
+    expect(ordinary).not.toContain('data-resume-session=')
+  })
+
   it('marks microphone input unavailable for local parity without disabling text chat', async () => {
     const html = await voiceDemoPageResponse(
       BRANDING,

@@ -32,7 +32,9 @@ import {
   directVoiceResponse,
   inrBudgetFromTranscript,
   isHelpCenterSupportRequest,
+  isOrderPlacementRequest,
   isStorefrontShoppingRequest,
+  ORDER_PLACEMENT_UNAVAILABLE_REPLY,
   productDiscoveryReply,
   productComparisonReply,
   productComparisonTerms,
@@ -133,6 +135,26 @@ const SESSION_STATE_KEY = 'voice_session_state'
  * that an abandoned visit does not retain contact details.
  */
 const ABANDONED_SESSION_GRACE_SECONDS = 10 * 60
+const MAX_VOICE_METRIC_MS = 5 * 60 * 1_000
+
+export type VoicePipelineMetricLog = {
+  llmMs: number
+  ttsMs: number
+  firstAudioMs: number
+  totalMs: number
+}
+
+export function readVoicePipelineMetrics(input: Record<string, unknown>): VoicePipelineMetricLog | null {
+  const values = [input.llmMs, input.ttsMs, input.firstAudioMs, input.totalMs]
+  if (!values.every((value) => typeof value === 'number'
+    && Number.isInteger(value) && value >= 0 && value <= MAX_VOICE_METRIC_MS)) return null
+  return {
+    llmMs: input.llmMs as number,
+    ttsMs: input.ttsMs as number,
+    firstAudioMs: input.firstAudioMs as number,
+    totalMs: input.totalMs as number,
+  }
+}
 
 function connectionState(connection: Connection): VoiceConnectionState {
   return connection.state && typeof connection.state === 'object'
@@ -261,6 +283,12 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
         connection.send(JSON.stringify({ type: 'voice_feedback_received', assistantTurn, rating }))
         return
       }
+      if (parsed.type === 'voice_pipeline_metrics') {
+        if (connectionState(connection).sessionProofPassed !== true) return
+        const metrics = readVoicePipelineMetrics(parsed)
+        if (metrics) console.log(JSON.stringify({ event: 'voice_pipeline_metrics', ...metrics }))
+        return
+      }
       if (parsed.type !== 'clear_demo_session') return
       await this.#patchSession({
         pendingEscalation: null,
@@ -332,6 +360,8 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       const continuationReply = await this.#completeSignInContinuation(context.connection, shopifyCustomer, contact)
       if (continuationReply !== null) return continuationReply
     }
+
+    if (isOrderPlacementRequest(transcript)) return ORDER_PLACEMENT_UNAVAILABLE_REPLY
 
     const classifiedCategory = classifyEscalation(transcript)
     const deterministicCategory = isTicketStatusRequest(transcript) && classifiedCategory === 'payment_or_refund'
@@ -692,6 +722,7 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
   async #startSession(connection: Connection, input: Record<string, unknown>): Promise<void> {
     const state = connectionState(connection)
     if (state.sessionProofPassed === true) {
+      this.#sendHistory(connection)
       connection.send(JSON.stringify({ type: 'voice_session_ready' }))
       return
     }
@@ -715,7 +746,15 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
       ...connectionState(connection),
       sessionProofPassed: true,
     } satisfies VoiceConnectionState)
+    this.#sendHistory(connection)
     connection.send(JSON.stringify({ type: 'voice_session_ready' }))
+  }
+
+  #sendHistory(connection: Connection): void {
+    const messages = this.getConversationHistory(80)
+      .filter((message) => message.content.trim() !== SIGN_IN_CONTINUATION)
+      .map((message) => ({ role: message.role, text: message.content }))
+    connection.send(JSON.stringify({ type: 'voice_history', messages }))
   }
 
   #requestSignIn(connection: Connection, reason?: VoiceSignInReason): void {
@@ -737,7 +776,15 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     const session = await this.#session()
     const pendingEscalation = session.pendingEscalation ?? null
     const pendingSignInReason = session.pendingSignInReason ?? null
+    const history = (await this.getConversationHistory(40)).map((message) => ({ role: message.role, content: message.content }))
     await this.#patchSession({ pendingEscalation: null, pendingSignInReason: null })
+
+    const originalCustomerRequest = [...history]
+      .reverse()
+      .find((message) => message.role === 'user' && message.content.trim() !== SIGN_IN_CONTINUATION)
+    if (originalCustomerRequest && isOrderPlacementRequest(originalCustomerRequest.content)) {
+      return ORDER_PLACEMENT_UNAVAILABLE_REPLY
+    }
 
     if (pendingEscalation) {
       try {
@@ -750,7 +797,6 @@ export class AbleDeskAgent extends VoiceAgent<Env> {
     }
 
     if (pendingSignInReason === 'order_lookup') {
-      const history = (await this.getConversationHistory(40)).map((message) => ({ role: message.role, content: message.content }))
       const orderNumber = findOrderNumber(history.filter((message) => message.content.trim() !== SIGN_IN_CONTINUATION))
       if (orderNumber) {
         const result = await orderStatusForSession(this.env, { email: contact.email }, orderNumber)

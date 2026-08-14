@@ -1,7 +1,11 @@
 import { SELF } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 
-import { SHOPIFY_CUSTOMER_LOGIN_COOKIE, SHOPIFY_CUSTOMER_SESSION_COOKIE } from '../src/identity/shopify-customer'
+import {
+  SHOPIFY_CUSTOMER_LOGIN_COOKIE,
+  SHOPIFY_CUSTOMER_RESUME_COOKIE,
+  SHOPIFY_CUSTOMER_SESSION_COOKIE,
+} from '../src/identity/shopify-customer'
 
 function setCookies(response: Response): string[] {
   return response.headers.getSetCookie?.() ?? []
@@ -15,6 +19,7 @@ describe('shopify customer sign-in routes', () => {
     const cookies = setCookies(response)
     expect(cookies.some((cookie) => cookie.startsWith(`${SHOPIFY_CUSTOMER_SESSION_COOKIE}=;`) && cookie.includes('Max-Age=0'))).toBe(true)
     expect(cookies.some((cookie) => cookie.startsWith(`${SHOPIFY_CUSTOMER_LOGIN_COOKIE}=;`) && cookie.includes('Max-Age=0'))).toBe(true)
+    expect(cookies.some((cookie) => cookie.startsWith(`${SHOPIFY_CUSTOMER_RESUME_COOKIE}=;`) && cookie.includes('Max-Age=0'))).toBe(true)
   })
 
   it('lands a callback without a login transaction back on the portal as anonymous', async () => {

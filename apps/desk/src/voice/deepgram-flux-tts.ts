@@ -6,6 +6,10 @@ const CONNECT_TIMEOUT_MS = 4_000
 const GENERATION_TIMEOUT_MS = 15_000
 const MAX_TEXT_LENGTH = 2_000
 const OUTPUT_SAMPLE_RATE = 24_000
+// 100 ms of mono 16-bit audio. Workers AI streams arbitrary byte boundaries,
+// including odd-length chunks; the browser client constructs Int16Array views
+// per WebSocket frame, so coalesce and align them before forwarding.
+const PCM_STREAM_FRAME_BYTES = OUTPUT_SAMPLE_RATE * 2 / 10
 const MODEL_PATTERN = /^flux-[a-z0-9-]+-en$/
 
 type DeepgramUpgradeResponse = {
@@ -77,13 +81,13 @@ type WorkersAIBinding = {
 }
 
 /** Cloudflare-hosted Aura fallback that matches Flux's raw PCM wire format. */
-export class WorkersAIPcmTTS implements TTSProvider {
+export class WorkersAIPcmTTS implements TTSProvider, StreamingTTSProvider {
   constructor(
     readonly ai: WorkersAIBinding,
     readonly speaker = 'harmonia',
   ) {}
 
-  async synthesize(text: string, signal?: AbortSignal): Promise<ArrayBuffer | null> {
+  async #response(text: string, signal?: AbortSignal): Promise<Response | null> {
     const speech = normalizeSpeech(text)
     if (!speech) return null
     if (speech.length > MAX_TEXT_LENGTH) {
@@ -107,14 +111,82 @@ export class WorkersAIPcmTTS implements TTSProvider {
         logTTSFailure('workers_ai_aura_2', { status: response.status })
         return null
       }
-      const audio = await response.arrayBuffer()
-      return audio.byteLength > 0 ? audio : null
+      return response
     } catch (error) {
       if (signal?.aborted) return null
       logTTSFailure('workers_ai_aura_2', {
         reason: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'provider',
       })
       return null
+    }
+  }
+
+  async synthesize(text: string, signal?: AbortSignal): Promise<ArrayBuffer | null> {
+    const frames: ArrayBuffer[] = []
+    let byteLength = 0
+    for await (const frame of this.synthesizeStream(text, signal)) {
+      frames.push(frame)
+      byteLength += frame.byteLength
+    }
+    if (byteLength === 0) return null
+
+    const joined = new Uint8Array(byteLength)
+    let offset = 0
+    for (const frame of frames) {
+      joined.set(new Uint8Array(frame), offset)
+      offset += frame.byteLength
+    }
+    return joined.buffer
+  }
+
+  async *synthesizeStream(text: string, signal?: AbortSignal): AsyncGenerator<ArrayBuffer> {
+    const response = await this.#response(text, signal)
+    if (!response || signal?.aborted) return
+    if (!response.body) {
+      const audio = await response.arrayBuffer()
+      if (audio.byteLength > 0) yield audio
+      return
+    }
+
+    const reader = response.body.getReader()
+    let frame = new Uint8Array(PCM_STREAM_FRAME_BYTES)
+    let frameLength = 0
+    try {
+      for (;;) {
+        if (signal?.aborted) {
+          await reader.cancel('interrupted')
+          return
+        }
+        const { done, value } = await reader.read()
+        if (done) break
+        let offset = 0
+        while (offset < value.byteLength) {
+          const copied = Math.min(frame.byteLength - frameLength, value.byteLength - offset)
+          frame.set(value.subarray(offset, offset + copied), frameLength)
+          frameLength += copied
+          offset += copied
+          if (frameLength === frame.byteLength) {
+            yield frame.buffer
+            frame = new Uint8Array(PCM_STREAM_FRAME_BYTES)
+            frameLength = 0
+          }
+        }
+      }
+
+      // linear16 must end on a complete two-byte sample. A malformed trailing
+      // byte is discarded rather than sending a frame the VoiceClient cannot
+      // construct an Int16Array over.
+      const alignedLength = frameLength - (frameLength % 2)
+      if (alignedLength > 0) yield frame.slice(0, alignedLength).buffer
+      if (alignedLength !== frameLength) logTTSFailure('workers_ai_aura_2', { reason: 'unaligned_audio' })
+    } catch (error) {
+      if (!signal?.aborted) {
+        logTTSFailure('workers_ai_aura_2', {
+          reason: error instanceof Error && error.name === 'AbortError' ? 'timeout' : 'provider',
+        })
+      }
+    } finally {
+      reader.releaseLock()
     }
   }
 }
