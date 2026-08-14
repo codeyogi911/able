@@ -18,5 +18,13 @@ raw-imports/
 attachments/
 worker-configuration.d.ts
 wrangler.production.generated.json
-.claude/
-!.github/
+
+# Agent working state. Committed agent assets (.claude/skills, .claude/agents)
+# ship to adopters; local session state does not.
+.claude/worktrees/
+.claude/settings.local.json
+
+# Private deployment context. AGENTS.local.md is where a deployer's own
+# business may be named; the committed example template is not ignored.
+AGENTS.local.md
+*.local.md
