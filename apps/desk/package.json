@@ -90,7 +90,7 @@
     "check": "npm run build:assets && npm run check:generated && npm run types && npm run typecheck && npm run typecheck:mcp-app && npm run typecheck:voice-demo && npm run typecheck:portal-search && npm run typecheck:voice-eval && npm run test"
   },
   "dependencies": {
-    "@cloudflare/voice": "0.3.5",
+    "@cloudflare/voice": "0.3.6",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "agents": "0.20.1",
@@ -105,7 +105,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.21.2",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@cloudflare/workers-types": "^5.20260813.1",
     "@playwright/test": "^1.62.0",
     "@types/node": "^24.0.0",
