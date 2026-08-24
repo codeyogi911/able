@@ -93,7 +93,7 @@
     "@cloudflare/voice": "0.3.5",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "agents": "0.20.1",
+    "agents": "0.21.0",
     "ai": "7.0.64",
     "hono": "^4.13.1",
     "lucide": "^1.27.0",
