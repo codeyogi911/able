@@ -27,7 +27,7 @@ jobs:
         # brand or copy change can hide there. This workflow exists to produce
         # the reviewed goldens, so it always rewrites all of them.
         run: npm run test:visual --workspace @able/desk -- --update-snapshots=all
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: able-linux-visual-baselines
           path: apps/desk/test/visual/snapshots/linux/
